@@ -1,7 +1,7 @@
 {
   "name": "tiny-crypto-suite",
   "version": "1.0.0",
-  "description": "Collection of small, essential scripts designed to be used across various projects. These simple utilities are crafted for speed, ease of use, and versatility.",
+  "description": "Tiny tools, big crypto — seamless encryption and certificate handling for modern web and Node apps.",
   "scripts": {
     "test": "npm run test:mjs && npm run test:cjs && npm run test:js",
     "test:js": "npx babel-node test/index.js",
@@ -34,8 +34,24 @@
     "url": "git+https://github.com/JasminDreasond/Tiny-Crypto.git"
   },
   "keywords": [
-    "lib",
-    "cryptography"
+    "encryption",
+    "decryption",
+    "AES",
+    "RSA",
+    "X.509",
+    "certificates",
+    "crypto",
+    "security",
+    "key management",
+    "public key",
+    "private key",
+    "certificate generation",
+    "data protection",
+    "cross-platform",
+    "nodejs",
+    "browser",
+    "secure storage",
+    "serialization"
   ],
   "author": "Yasmin Seidel (Jasmin Dreasond)",
   "license": "GPL-3.0-only",
