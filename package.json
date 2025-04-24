@@ -1,5 +1,5 @@
 {
-  "name": "tiny-crypto",
+  "name": "tiny-crypto-suite",
   "version": "1.0.0",
   "description": "Collection of small, essential scripts designed to be used across various projects. These simple utilities are crafted for speed, ease of use, and versatility.",
   "scripts": {
