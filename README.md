@@ -39,6 +39,33 @@ Together, they form a flexible system for secure communication, configuration ha
 
 ---
 
+## 📦 Installation
+
+```bash
+npm install tiny-crypto-suite
+```
+
+---
+
+## 🚀 Usage Example
+
+```js
+// Import the module
+import { TinyCrypto, TinyCertCrypto } from 'tiny-crypto-suite';
+
+// Create an instance of TinyCrypto
+const symmetric = new TinyCrypto();
+
+// Create an instance of TinyCertCrypto (Node.js only for full features)
+const asymmetric = new TinyCertCrypto({
+  publicCertPath: 'cert.pem',
+  privateKeyPath: 'key.pem'
+});
+
+```
+
+---
+
 ## ⚙️ Quick Overview
 
 ### 🔧 TinyCertCrypto
