@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "outDir": "./dist",
+        "allowJs": true,
+        "checkJs": true,
+        "removeComments": false,
+        "declaration": true,
+        "declarationMap": false,
+        "declarationDir": "./dist",
+        "emitDeclarationOnly": false,
+        "target": "ESNext",
+        "strict": true,
+        "moduleResolution": "node"
+    },
+    "include": ["src"],
+    "exclude": ["node_modules"]
+}
