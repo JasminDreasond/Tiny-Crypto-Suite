@@ -36,9 +36,9 @@
   "keywords": [
     "encryption",
     "decryption",
-    "AES",
-    "RSA",
-    "X.509",
+    "aes",
+    "rsa",
+    "x.509",
     "certificates",
     "crypto",
     "security",
