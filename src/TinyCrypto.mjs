@@ -368,7 +368,7 @@ class TinyCrypto {
    * input encoding format, the cryptographic key (in hexadecimal format), and the authentication tag length.
    * This method does not include any sensitive data like the raw key, only its hexadecimal representation.
    *
-   * @returns {Object} The exported configuration as a plain JavaScript object.
+   * @returns {{algorithm: string, outputEncoding: BufferEncoding, inputEncoding: BufferEncoding, key: string, authTagLength: number }} The exported configuration as a plain JavaScript object.
    * @example
    * const config = cryptoManager.exportConfig();
    * console.log(config);

@@ -108,12 +108,13 @@ class TinyCertCrypto {
    *
    * This method is private and should not be called directly from outside.
    *
-   * @returns {Promise<Object>} The loaded `node-forge` module.
+   * @returns {Promise<*>} The loaded `node-forge` module.
    */
   async #fetchNodeForge() {
     if (!this.forge) {
       // @ts-ignore
       const forge = await import(/* webpackMode: "eager" */ 'node-forge');
+      // @ts-ignore
       this.forge = forge.default;
     }
     return this.#getNodeForge();
@@ -123,7 +124,7 @@ class TinyCertCrypto {
    * Public wrapper for fetching the `node-forge` module.
    * Useful for on-demand loading in environments like browsers.
    *
-   * @returns {Promise<Object>} The loaded `node-forge` module.
+   * @returns {Promise<*>} The loaded `node-forge` module.
    */
   async fetchNodeForge() {
     return this.#fetchNodeForge();
@@ -133,7 +134,7 @@ class TinyCertCrypto {
    * Returns the previously loaded `node-forge` instance.
    * Assumes the module has already been loaded.
    *
-   * @returns {Object} The `node-forge` module.
+   * @returns {*} The `node-forge` module.
    */
   #getNodeForge() {
     return this.forge;
@@ -142,7 +143,7 @@ class TinyCertCrypto {
   /**
    * Public wrapper for accessing the `node-forge` instance.
    *
-   * @returns {Object} The `node-forge` module.
+   * @returns {*} The `node-forge` module.
    */
   getNodeForge() {
     return this.#getNodeForge();
@@ -468,7 +469,7 @@ class TinyCertCrypto {
    * Returns an object containing the certificate's metadata such as the subject, issuer,
    * serial number, and validity period. If no certificate is loaded, an empty object is returned.
    *
-   * @returns {Object} The metadata of the certificate, or an empty object if no certificate is loaded.
+   * @returns {Record<string, any>} The metadata of the certificate, or an empty object if no certificate is loaded.
    */
   extractCertMetadata() {
     return this.metadata || {};
