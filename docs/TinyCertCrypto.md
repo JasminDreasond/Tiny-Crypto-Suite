@@ -193,10 +193,4 @@ An object containing all the generated artifacts:
 
 - 🔄 The `subject` and `issuer` of the certificate are the same (self-signed).
 - ⏳ The certificate `validFrom` is set to the current date, and `validTo` is based on the `validityInYears` option.
-- 🔢 A secure random `serialNumber` is generated using `crypto.randomBytes`.
-
----
-
-**⚠️ Availability:**
-
-> This method is only available in **Node.js environments** due to its dependency on the native `crypto` module and synchronous file access via `fs`.
+- 🔢 A secure random `serialNumber` is generated using `node-forge`.

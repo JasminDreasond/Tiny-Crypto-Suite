@@ -1,18 +1,8 @@
 import { randomBytes, createDecipheriv, createCipheriv } from 'crypto';
 import * as fs from 'fs';
 import { Buffer } from 'buffer';
-import { objType } from './lib/objFilter.mjs';
-
-/**
- * Determines if the environment is a browser.
- *
- * This constant checks if the code is running in a browser environment by verifying if
- * the `window` object and the `window.document` object are available. It will return `true`
- * if the environment is a browser, and `false` otherwise (e.g., in a Node.js environment).
- *
- * @constant {boolean}
- */
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+import { objType } from 'tiny-essentials';
+import { isBrowser } from './lib/os.mjs';
 
 /**
  * TinyCrypto is a utility class that provides methods for secure key generation,
@@ -229,7 +219,7 @@ class TinyCrypto {
    */
   saveKeyToFile(filename = 'secret.key') {
     const data = this.key.toString('hex');
-    if (isBrowser) {
+    if (isBrowser()) {
       const blob = new Blob([data], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -258,7 +248,7 @@ class TinyCrypto {
    */
   saveConfigToFile(filename = 'crypto-config.json') {
     const configData = JSON.stringify(this.exportConfig(), null, 2);
-    if (isBrowser) {
+    if (isBrowser()) {
       const blob = new Blob([configData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -292,7 +282,7 @@ class TinyCrypto {
    *   .catch(err => console.error('Error loading config:', err));
    */
   async loadConfigFromFile(file) {
-    if (isBrowser) {
+    if (isBrowser()) {
       return new Promise((resolve, reject) => {
         if (!(file instanceof File))
           return reject(new Error('In browser, the file must be a File object'));
@@ -339,7 +329,7 @@ class TinyCrypto {
    *   .catch(err => console.error('Error loading key:', err));
    */
   async loadKeyFromFile(file) {
-    if (isBrowser) {
+    if (isBrowser()) {
       return new Promise((resolve, reject) => {
         if (!(file instanceof File))
           return reject(new Error('In browser, the file must be a File object'));

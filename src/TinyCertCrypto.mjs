@@ -1,16 +1,6 @@
 import * as fs from 'fs';
 import { Buffer } from 'buffer';
-
-/**
- * Determines if the environment is a browser.
- *
- * This constant checks if the code is running in a browser environment by verifying if
- * the `window` object and the `window.document` object are available. It will return `true`
- * if the environment is a browser, and `false` otherwise (e.g., in a Node.js environment).
- *
- * @constant {boolean}
- */
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+import { isBrowser } from './lib/os.mjs';
 
 /**
  * Class representing a certificate and key management utility.
@@ -87,9 +77,6 @@ class TinyCertCrypto {
     privateKeyBuffer = null,
     cryptoType = 'RSA-OAEP',
   } = {}) {
-    if (!publicCertPath && !publicCertBuffer && isBrowser)
-      throw new Error('In browser, publicCertPath or publicCertBuffer must be provided');
-
     if (
       publicCertBuffer &&
       typeof publicCertBuffer !== 'string' &&
@@ -367,7 +354,7 @@ class TinyCertCrypto {
       );
 
     // Nodejs
-    if (!isBrowser) {
+    if (!isBrowser()) {
       const usedPublicBuffer = !!this.publicCertBuffer;
       const usedPrivateBuffer = !!this.privateKeyBuffer;
 
