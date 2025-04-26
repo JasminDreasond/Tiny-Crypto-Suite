@@ -20,6 +20,7 @@ class TinyCertCrypto {
   /** @typedef {import('node-forge').pki.rsa.EncryptionScheme} EncryptionScheme */
   /** @typedef {import('node-forge').pki.PEM} PEM */
   /** @typedef {Record<string|number, any>|any[]} CryptoResult */
+  /** @typedef {string} Base64 */
 
   /** @type {PublicKey|null} */ publicKey = null;
   /** @type {PrivateKey|null} */ privateKey = null;
@@ -482,7 +483,7 @@ class TinyCertCrypto {
    * `cryptoType` property (e.g., 'RSA-OAEP').
    *
    * @param {CryptoResult} jsonObject - The JSON object to be encrypted.
-   * @returns {string} The encrypted JSON object, encoded in Base64 format.
+   * @returns {Base64} The encrypted JSON object, encoded in Base64 format.
    * @throws {Error} If the public key is not initialized (i.e., if `init()` or `generateKeyPair()` has not been called).
    */
   encryptJson(jsonObject) {
@@ -500,7 +501,7 @@ class TinyCertCrypto {
    * This method takes the encrypted Base64 string, decodes it, and decrypts it using the
    * private key in PEM format. It then parses the decrypted string back into a JSON object.
    *
-   * @param {string} encryptedBase64 - The encrypted JSON string in Base64 format to be decrypted.
+   * @param {Base64} encryptedBase64 - The encrypted JSON string in Base64 format to be decrypted.
    * @returns {CryptoResult} The decrypted JSON object.
    * @throws {Error} If the private key is not initialized.
    */
