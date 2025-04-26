@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { Buffer } from 'buffer';
+import clone from 'clone';
 import { isBrowser } from './lib/os.mjs';
 
 /**
@@ -472,7 +473,7 @@ class TinyCertCrypto {
    * @returns {Record<string, any>} The metadata of the certificate, or an empty object if no certificate is loaded.
    */
   extractCertMetadata() {
-    return this.metadata || {};
+    return this.metadata ? clone(this.metadata) : {};
   }
 
   /**

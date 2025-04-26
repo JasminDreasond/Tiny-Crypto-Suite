@@ -11,7 +11,8 @@
         "target": "ESNext",
         "strict": true,
         "moduleResolution": "node",
-        "module": "esnext"
+        "module": "esnext",
+        "allowSyntheticDefaultImports": true,
     },
     "include": ["src"],
     "exclude": ["node_modules"]
