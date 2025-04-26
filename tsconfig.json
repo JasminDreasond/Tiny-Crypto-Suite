@@ -10,7 +10,8 @@
         "emitDeclarationOnly": false,
         "target": "ESNext",
         "strict": true,
-        "moduleResolution": "node"
+        "moduleResolution": "node",
+        "module": "esnext"
     },
     "include": ["src"],
     "exclude": ["node_modules"]

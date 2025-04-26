@@ -22,6 +22,21 @@ const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'u
  * @class
  */
 class TinyCertCrypto {
+  /** @typedef {import('node-forge')} NodeForge */
+  /** @typedef {import('node-forge').pki.Certificate} Certificate */
+  /** @typedef {import('node-forge').pki.CertificateField} CertificateField */
+  /** @typedef {import('node-forge').pki.rsa.PublicKey} PublicKey */
+  /** @typedef {import('node-forge').pki.rsa.PrivateKey} PrivateKey */
+  /** @typedef {import('node-forge').pki.rsa.EncryptionScheme} EncryptionScheme */
+  /** @typedef {import('node-forge').pki.PEM} PEM */
+  /** @typedef {Record<string|number, any>|any[]} CryptoResult */
+
+  /** @type {PublicKey|null} */ publicKey = null;
+  /** @type {PrivateKey|null} */ privateKey = null;
+  /** @type {Certificate|null} */ publicCert = null;
+  /** @type {Record<string, any>|null} */ metadata = null;
+  /** @type {string|null} */ source = null;
+
   /**
    * Regular expression for matching X.509 PEM certificates.
    *
@@ -60,10 +75,10 @@ class TinyCertCrypto {
    * @param {string|null} [options.privateKeyPath=null] - Path or URL to the private key in PEM format.
    * @param {string|Buffer|null} [options.publicCertBuffer=null] - The public certificate as a PEM string or Buffer.
    * @param {string|Buffer|null} [options.privateKeyBuffer=null] - The private key as a PEM string or Buffer.
-   * @param {string} [options.cryptoType='RSA-OAEP'] - The algorithm identifier used with Crypto API.
+   * @param {EncryptionScheme} [options.cryptoType='RSA-OAEP'] - The algorithm identifier used with Crypto API.
    *
    * @throws {Error} If in a browser and neither `publicCertPath` nor `publicCertBuffer` is provided.
-   * @throws {TypeError} If provided buffers are not strings or Buffers.
+   * @throws {Error} If provided buffers are not strings or Buffers.
    */
   constructor({
     publicCertPath = null,
@@ -80,26 +95,20 @@ class TinyCertCrypto {
       typeof publicCertBuffer !== 'string' &&
       !Buffer.isBuffer(publicCertBuffer)
     )
-      throw new TypeError('publicCertBuffer must be a string or Buffer');
+      throw new Error('publicCertBuffer must be a string or Buffer');
 
     if (
       privateKeyBuffer &&
       typeof privateKeyBuffer !== 'string' &&
       !Buffer.isBuffer(privateKeyBuffer)
     )
-      throw new TypeError('privateKeyBuffer must be a string or Buffer');
+      throw new Error('privateKeyBuffer must be a string or Buffer');
 
-    this.source = null;
     this.cryptoType = cryptoType;
     this.publicCertPath = publicCertPath;
     this.privateKeyPath = privateKeyPath;
     this.publicCertBuffer = publicCertBuffer;
     this.privateKeyBuffer = privateKeyBuffer;
-    this.publicKey = null;
-    this.privateKey = null;
-    this.publicCert = null;
-    this.metadata = null;
-    this.forge = null;
   }
 
   /**
@@ -108,14 +117,13 @@ class TinyCertCrypto {
    *
    * This method is private and should not be called directly from outside.
    *
-   * @returns {Promise<*>} The loaded `node-forge` module.
+   * @returns {Promise<NodeForge>} The loaded `node-forge` module.
    */
   async #fetchNodeForge() {
     if (!this.forge) {
-      // @ts-ignore
       const forge = await import(/* webpackMode: "eager" */ 'node-forge');
       // @ts-ignore
-      this.forge = forge.default;
+      this.forge = forge?.default ?? forge;
     }
     return this.#getNodeForge();
   }
@@ -124,7 +132,7 @@ class TinyCertCrypto {
    * Public wrapper for fetching the `node-forge` module.
    * Useful for on-demand loading in environments like browsers.
    *
-   * @returns {Promise<*>} The loaded `node-forge` module.
+   * @returns {Promise<NodeForge>} The loaded `node-forge` module.
    */
   async fetchNodeForge() {
     return this.#fetchNodeForge();
@@ -134,16 +142,22 @@ class TinyCertCrypto {
    * Returns the previously loaded `node-forge` instance.
    * Assumes the module has already been loaded.
    *
-   * @returns {*} The `node-forge` module.
+   * @returns {NodeForge} The `node-forge` module.
    */
   #getNodeForge() {
+    if (typeof this.forge === 'undefined')
+      throw new Error(
+        'Failed to initialize Forge: Module is undefined.\n' +
+          'Please make sure "node-forge" is installed.\n' +
+          'You can install it by running: npm install node-forge',
+      );
     return this.forge;
   }
 
   /**
    * Public wrapper for accessing the `node-forge` instance.
    *
-   * @returns {*} The `node-forge` module.
+   * @returns {NodeForge} The `node-forge` module.
    */
   getNodeForge() {
     return this.#getNodeForge();
@@ -187,7 +201,6 @@ class TinyCertCrypto {
       throw new Error('A certificate is already loaded into the instance.');
 
     // Prepare cert
-    /**  @type {any} */
     const { pki } = await this.#fetchNodeForge();
 
     /**
@@ -227,9 +240,9 @@ class TinyCertCrypto {
 
   /**
    * @typedef {Object} CertificateDetails
-   * @property {string} cert - The certificate in PEM format.
-   * @property {string} publicPem - The public key in PEM format.
-   * @property {string} privatePem - The private key in PEM format.
+   * @property {PEM} cert - The certificate in PEM format.
+   * @property {PublicKey} publicPem - The public key in PEM format.
+   * @property {PrivateKey} privatePem - The private key in PEM format.
    */
 
   /**
@@ -250,15 +263,16 @@ class TinyCertCrypto {
    *   - {Object} privatePem: The parsed private key object (from node-forge).
    */
   #generateCertificate(subject, publicKey, privateKey, validityInYears, randomBytesLength) {
-    const { pki } = this.forge;
+    const { pki, random } = this.#getNodeForge();
     const cert = pki.createCertificate();
     const publicPem = pki.publicKeyFromPem(publicKey);
     const privatePem = pki.privateKeyFromPem(privateKey);
 
+    if (typeof publicPem !== 'object') throw new Error('Public pem must be a publicPem.');
+    if (typeof privatePem !== 'object') throw new Error('Private pem must be a privatePem.');
+
     cert.publicKey = publicPem;
-    cert.serialNumber = Buffer.from(this.forge.random.getBytesSync(randomBytesLength)).toString(
-      'hex',
-    );
+    cert.serialNumber = Buffer.from(random.getBytesSync(randomBytesLength)).toString('hex');
     cert.validity.notBefore = new Date();
     cert.validity.notAfter = new Date();
     cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + validityInYears);
@@ -299,7 +313,6 @@ class TinyCertCrypto {
 
     // Load public key
     this.metadata = {};
-    /**  @type {any} */
     const { pki } = await this.#fetchNodeForge();
 
     /**
@@ -320,6 +333,7 @@ class TinyCertCrypto {
       // Cert
       if (fileType === 'certificate') {
         const cert = pki.certificateFromPem(publicPem);
+        // @ts-ignore
         this.publicKey = cert.publicKey;
         this.#loadX509Certificate(cert);
       }
@@ -344,11 +358,11 @@ class TinyCertCrypto {
     };
 
     if (typeof this.publicCertPath !== 'string')
-      throw new TypeError(
+      throw new Error(
         `Expected 'publicCertPath' to be a string, but got ${typeof this.publicCertPath}`,
       );
     if (typeof this.privateKeyPath !== 'string')
-      throw new TypeError(
+      throw new Error(
         `Expected 'privateKeyPath' to be a string, but got ${typeof this.privateKeyPath}`,
       );
 
@@ -416,24 +430,17 @@ class TinyCertCrypto {
    * This method supports both PEM strings and already-parsed Forge certificate objects.
    * The parsed certificate is saved to `this.publicCert` and its metadata is extracted to `this.metadata`.
    *
-   * @param {string|object} certPem - A PEM-encoded certificate string or a `forge.pki.Certificate` object.
+   * @param {string|Certificate} certPem - A PEM-encoded certificate string or a `forge.pki.Certificate` object.
    * @throws {Error} If the certificate cannot be parsed or processed.
    */
   #loadX509Certificate(certPem) {
+    const { pki } = this.#getNodeForge();
     try {
-      const { pki } = this.forge;
       const cert = typeof certPem === 'string' ? pki.certificateFromPem(certPem) : certPem;
       this.publicCert = cert;
 
       /**
-       * @typedef {Object} Attribute
-       * @property {string} name - The name of the attribute.
-       * @property {string} shortName - The short name of the attribute.
-       * @property {string} value - The value of the attribute.
-       */
-
-      /**
-       * @param {Array<Attribute>} attributes - The list of attributes, each containing `name`, `shortName`, and `value`.
+       * @param {Array<CertificateField>} attributes - The list of attributes, each containing `name`, `shortName`, and `value`.
        * @returns {{names: { [key: string]: string }, shortNames: { [key: string]: string }, raw: string}} The processed data containing the organized attributes.
        */
       const insertData = (attributes) => {
@@ -441,10 +448,15 @@ class TinyCertCrypto {
         const names = {};
         /** @type {{[key: string]: string}} */
         const shortNames = {};
-        const raw = attributes.map((attr) => `${attr.shortName}=${attr.value}`).join(',');
+        const raw = attributes
+          .filter((attr) => typeof attr.shortName === 'string' && typeof attr.value === 'string')
+          .map((attr) => `${attr.shortName}=${attr.value}`)
+          .join(',');
         for (const item of attributes) {
-          names[item.name] = item.value;
-          shortNames[item.shortName] = item.value;
+          if (typeof item.name === 'string' && typeof item.value === 'string')
+            names[item.name] = item.value;
+          if (typeof item.shortName === 'string' && typeof item.value === 'string')
+            shortNames[item.shortName] = item.value;
         }
         return { names, shortNames, raw };
       };
@@ -482,16 +494,17 @@ class TinyCertCrypto {
    * public key in PEM format. The encryption is done using the algorithm defined in the
    * `cryptoType` property (e.g., 'RSA-OAEP').
    *
-   * @param {Object} jsonObject - The JSON object to be encrypted.
+   * @param {CryptoResult} jsonObject - The JSON object to be encrypted.
    * @returns {string} The encrypted JSON object, encoded in Base64 format.
    * @throws {Error} If the public key is not initialized (i.e., if `init()` or `generateKeyPair()` has not been called).
    */
   encryptJson(jsonObject) {
+    const forge = this.#getNodeForge();
     if (!this.publicKey)
       throw new Error('Public key is not initialized. Call init() or generateKeyPair() first.');
     const jsonString = JSON.stringify(jsonObject);
     const encrypted = this.publicKey.encrypt(jsonString, this.cryptoType);
-    return this.forge.util.encode64(encrypted);
+    return forge.util.encode64(encrypted);
   }
 
   /**
@@ -501,12 +514,13 @@ class TinyCertCrypto {
    * private key in PEM format. It then parses the decrypted string back into a JSON object.
    *
    * @param {string} encryptedBase64 - The encrypted JSON string in Base64 format to be decrypted.
-   * @returns {Object} The decrypted JSON object.
+   * @returns {CryptoResult} The decrypted JSON object.
    * @throws {Error} If the private key is not initialized.
    */
   decryptToJson(encryptedBase64) {
+    const forge = this.#getNodeForge();
     if (!this.privateKey) throw new Error('Private key is required for decryption');
-    const data = this.forge.util.decode64(encryptedBase64);
+    const data = forge.util.decode64(encryptedBase64);
     const decrypted = this.privateKey.decrypt(data, this.cryptoType);
     return JSON.parse(decrypted);
   }
