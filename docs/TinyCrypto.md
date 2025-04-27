@@ -102,6 +102,19 @@ Generates a secure random IV. Default: 12 bytes (GCM standard).
 
 ---
 
+### 🔑 `getKey()`
+
+This method returns the current cryptographic key used internally by the class.
+The key is converted to a hexadecimal (hex) string before being returned.
+
+---
+
+### 🔑 `setKey(keyHex)`
+
+This method allows setting a cryptographic key directly. The key should be provided as a string (in hex format) and will be converted to a Buffer for internal use. If the key format is incorrect, an error will be thrown.
+
+---
+
 ### 💾 `saveKeyToFile(filename = 'secret.key')`
 
 Saves the current key to a file (browser: prompts download).

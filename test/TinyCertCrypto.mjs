@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { TinyCertCrypto } from '../dist/index.mjs';
+import { TinyCertCrypto, TinyCrypto } from '../dist/index.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +34,8 @@ function printSeparator(title, colorCode = '\x1b[36m') {
 const testWithInstance = async (cryptoInstance, title = 'Instance') => {
   printSeparator(`🔬 TESTING: ${title}`, '\x1b[35m');
 
+  cryptoInstance.startCrypto();
+
   const testData = {
     name: 'Yasmin',
     isBrony: true,
@@ -44,6 +46,12 @@ const testWithInstance = async (cryptoInstance, title = 'Instance') => {
     name: 'Pudding',
     isBrony: false,
     favoritePony: 'Pinkie Pie',
+    inventory: ['candy', 'cookie', 'tiny pudding'],
+    keys: { isPudding: true, secret: [1, 2], secret2: { 1: true, 2: false } },
+    map: new Map([
+      ['pudding', 'chocolate'],
+      ['pony', 'mio'],
+    ]),
   };
 
   const encrypted = await cryptoInstance.encryptJson(testData);
@@ -52,11 +60,17 @@ const testWithInstance = async (cryptoInstance, title = 'Instance') => {
   const decrypted = await cryptoInstance.decryptToJson(encrypted);
   console.log('✅ Decrypted JSON:', decrypted);
 
-  const encrypted2 = await cryptoInstance.encrypt(testData2);
+  const encrypted2 = await cryptoInstance.encryptWithoutKey(testData2);
   console.log('📦 Encrypted Base64 2:', encrypted2);
 
-  const decrypted2 = await cryptoInstance.decrypt(encrypted2);
+  const decrypted2 = await cryptoInstance.decryptWithoutKey(encrypted2);
   console.log('✅ Decrypted JSON 2:', decrypted2);
+
+  const encrypted3 = await cryptoInstance.encrypt(testData2);
+  console.log('📦 Encrypted Base64 3:', encrypted3);
+
+  const decrypted3 = await cryptoInstance.decrypt(encrypted3);
+  console.log('✅ Decrypted JSON 3:', decrypted3);
 
   console.log('🔍 Extracting certificate metadata...');
   const metadata = cryptoInstance.extractCertMetadata();
@@ -70,12 +84,15 @@ const main = async () => {
 
   printSeparator('📜 IN-MEMORY CERTIFICATE TESTS', '\x1b[36m');
   cryptoInstance = new TinyCertCrypto();
-  const { publicKey, privateKey, cert } = await cryptoInstance.generateX509Cert({
-    countryName: 'BR',
-    organizationName: 'JasminOrg',
-    commonName: 'localhost',
-    emailAddress: 'tiny@puddy.club',
-  });
+  const { publicKey, privateKey, cert } = await cryptoInstance.generateX509Cert(
+    {
+      countryName: 'BR',
+      organizationName: 'JasminOrg',
+      commonName: 'localhost',
+      emailAddress: 'tiny@puddy.club',
+    },
+    { validityInYears: 3 },
+  );
 
   console.log('💾 Saving generated certs to disk...');
   await saveCertFiles(publicKey, privateKey, cert);

@@ -62,6 +62,8 @@ const tinyCert = new TinyCertCrypto({
   privateKeyPath: 'key.pem'
 });
 
+tinyCert.startCrypto();
+
 ```
 
 ---

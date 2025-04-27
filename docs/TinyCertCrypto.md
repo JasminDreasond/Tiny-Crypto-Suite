@@ -45,6 +45,34 @@ Initializes the certificate and key system from files, memory buffers, or URLs.
 
 ---
 
+### 🔐 `existsCrypto()`
+
+Checks if the `TinyCrypto` instance has been set.
+
+This method returns `true` if the `TinyCrypto` module has been assigned and is not `null`, otherwise it returns `false`.
+
+```js
+const cryptoExists = instance.existsCrypto();
+```
+
+#### Returns:
+- **`true`**: If the `TinyCrypto` module exists and has been properly set.
+- **`false`**: If the `TinyCrypto` module is not set or is `null`.
+
+#### Example:
+
+```js
+if (instance.existsCrypto()) {
+  console.log("TinyCrypto instance is available.");
+} else {
+  console.log("TinyCrypto instance is not set.");
+}
+```
+
+This method is useful for checking the availability of the `TinyCrypto` instance before performing cryptographic operations.
+
+---
+
 ### 📑 `extractCertMetadata()`
 Returns parsed metadata from the loaded certificate.
 
@@ -95,6 +123,41 @@ Decrypts a previously encrypted value and returns the original data. You can opt
 ```js
 const plain = instance.decrypt(result, 'string');
 ```
+
+---
+
+### 🛡️ `encryptWithoutKey(data)`
+
+Encrypts a value and returns a **Base64-encoded string**.
+
+```js
+const result = instance.encryptWithoutKey('Hello!');
+```
+
+#### Behavior:
+- The data is encrypted without the AES key.
+- The returned result is a Base64-encoded string, similar to the regular `encrypt()` function.
+- This method is suitable when you wish to use a different encryption method.
+
+---
+
+### 🔓 `decryptWithoutKey(data, expectedType?)`
+
+Decrypts a previously encrypted value and returns the original data. You can optionally pass an `expectedType` to validate it.
+
+```js
+const plain = instance.decryptWithoutKey(result, 'string');
+```
+
+#### Behavior:
+- The data is decrypted using the internal AES key.
+- You can pass an optional `expectedType` to ensure the decrypted value matches the expected type, similar to the regular `decrypt()` function.
+- This method is suitable when you wish to use a different encryption method.
+
+---
+
+### 🔧 `setDeepMode(value)`
+Sets the behavior for deep serialization and deserialization in the TinyCrypto instance.
 
 ---
 

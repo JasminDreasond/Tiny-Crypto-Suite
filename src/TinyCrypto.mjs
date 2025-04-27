@@ -32,11 +32,11 @@ class TinyCrypto {
    * Throws an error if the value is not a boolean.
    *
    * @param {boolean} value - A boolean indicating whether deep mode should be enabled.
-   * @throws {TypeError} Throws if the provided value is not a boolean.
+   * @throws {Error} Throws if the provided value is not a boolean.
    */
   setDeepMode(value) {
     if (typeof value !== 'boolean')
-      throw new TypeError('The value provided to setDeepMode must be a boolean.');
+      throw new Error('The value provided to setDeepMode must be a boolean.');
 
     this.isDeep = value;
   }
@@ -68,6 +68,31 @@ class TinyCrypto {
     this.outputEncoding = options.outputEncoding || 'hex';
     /** @type {BufferEncoding} */
     this.inputEncoding = options.inputEncoding || 'utf8';
+  }
+
+  /**
+   * Exports the current cryptographic key.
+   *
+   * @returns {string} The exported key as a hex string.
+   */
+  getKey() {
+    return this.key.toString('hex');
+  }
+
+  /**
+   * Sets the cryptographic key.
+   *
+   * This method allows setting a cryptographic key directly. The key should be provided as a string
+   * (in hex format) and will be converted to a Buffer for internal use. If the key format is incorrect,
+   * an error will be thrown.
+   *
+   * @param {string} keyHex - The cryptographic key in hex format to be set.
+   * @throws {Error} If the provided key is not a valid hex string.
+   */
+  setKey(keyHex) {
+    if (typeof keyHex !== 'string' || !/^[a-fA-F0-9]+$/.test(keyHex))
+      throw new Error('Invalid key format. The key must be a valid hex string.');
+    this.key = Buffer.from(keyHex, 'hex');
   }
 
   /**
@@ -123,18 +148,13 @@ class TinyCrypto {
       authTagLength: this.authTagLength,
     });
 
-    // @ts-ignore
     let encrypted = cipher.update(plainText, this.inputEncoding);
-    // @ts-ignore
     encrypted = Buffer.concat([encrypted, cipher.final()]);
     const authTag = cipher.getAuthTag();
 
     return {
-      // @ts-ignore
       iv: iv.toString(this.outputEncoding),
-      // @ts-ignore
       encrypted: encrypted.toString(this.outputEncoding),
-      // @ts-ignore
       authTag: authTag.toString(this.outputEncoding),
     };
   }
@@ -180,8 +200,7 @@ class TinyCrypto {
     decipher.setAuthTag(authTagBuffer);
 
     /** @type {string} */
-    // @ts-ignore
-    let decrypted = decipher.update(encryptedBuffer, null, this.inputEncoding);
+    let decrypted = decipher.update(encryptedBuffer, undefined, this.inputEncoding);
     decrypted += decipher.final(this.inputEncoding);
     const { value } = this.isDeep
       ? this.#parser.deserializeDeep(decrypted, expectedType)
@@ -219,9 +238,7 @@ class TinyCrypto {
 
     decipher.setAuthTag(authTagBuffer);
 
-    // @ts-ignore
-    let decrypted = decipher.update(encryptedBuffer, null, this.inputEncoding);
-    // @ts-ignore
+    let decrypted = decipher.update(encryptedBuffer, undefined, this.inputEncoding);
     decrypted += decipher.final(this.inputEncoding);
 
     const { type } = this.#parser.deserialize(decrypted);

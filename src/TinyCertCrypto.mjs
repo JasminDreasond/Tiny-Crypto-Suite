@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { Buffer } from 'buffer';
 import clone from 'clone';
 import { isBrowser } from './lib/os.mjs';
-import TinyCryptoParser from './lib/TinyCryptoParser.mjs';
+import TinyCrypto from './TinyCrypto.mjs';
 
 /**
  * Class representing a certificate and key management utility.
@@ -29,12 +29,7 @@ class TinyCertCrypto {
   /** @type {Certificate|null} */ publicCert = null;
   /** @type {Record<string, any>|null} */ metadata = null;
   /** @type {string|null} */ source = null;
-
-  /**
-   * Important instance used to validate values.
-   * @type {TinyCryptoParser}
-   */
-  #parser = new TinyCryptoParser();
+  /** @type {TinyCrypto|null} */ #tinyCrypto = null;
 
   /**
    * Regular expression for matching X.509 PEM certificates.
@@ -105,6 +100,59 @@ class TinyCertCrypto {
     this.privateKeyPath = privateKeyPath;
     this.publicCertBuffer = publicCertBuffer;
     this.privateKeyBuffer = privateKeyBuffer;
+  }
+
+  /**
+   * Starts the internal TinyCrypto instance.
+   * If an internal TinyCrypto instance is already set, an error will be thrown to prevent overriding it.
+   *
+   * @param {TinyCrypto} [tinyCrypto] - The TinyCrypto instance to be set.
+   * @throws {Error} Throws if TinyCrypto instance has already been set.
+   */
+  startCrypto(tinyCrypto) {
+    if (this.#tinyCrypto) throw new Error('TinyCrypto instance is already set.');
+    if (typeof tinyCrypto === 'undefined') this.#tinyCrypto = new TinyCrypto();
+    else this.#tinyCrypto = tinyCrypto;
+  }
+
+  /**
+   * Returns the previously loaded TinyCrypto instance.
+   * Assumes the module has already been loaded.
+   *
+   * @returns {TinyCrypto} The TinyCrypto module.
+   */
+  getCrypto() {
+    if (typeof this.#tinyCrypto === 'undefined' || this.#tinyCrypto === null)
+      throw new Error(
+        `Failed to get TinyCrypto: Module is ${this.#tinyCrypto !== null ? 'undefined' : 'null'}.\n` +
+          'Please make sure to use this.startCrypto().',
+      );
+    return this.#tinyCrypto;
+  }
+
+  /**
+   * Checks if the TinyCrypto instance exists.
+   *
+   * This method returns `true` if the TinyCrypto module has been set and is not null,
+   * otherwise returns `false`.
+   *
+   * @returns {boolean} Whether the TinyCrypto module exists.
+   */
+  existsCrypto() {
+    return typeof this.#tinyCrypto !== 'undefined' && this.#tinyCrypto !== null ? true : false;
+  }
+
+  /**
+   * Sets the deep serialization and deserialization mode in the TinyCrypto instance.
+   * If the argument is a boolean, updates the deep mode accordingly.
+   * Throws an error if the value is not a boolean.
+   *
+   * @param {boolean} value - A boolean indicating whether deep mode should be enabled.
+   * @throws {Error} Throws if the provided value is not a boolean.
+   */
+  setDeepMode(value) {
+    const tinyCrypto = this.getCrypto();
+    return tinyCrypto.setDeepMode(value);
   }
 
   /**
@@ -493,6 +541,32 @@ class TinyCertCrypto {
   }
 
   /**
+   * @param {string} data - The JSON object to be encrypted.
+   * @returns {Base64} The encrypted JSON object, encoded in Base64 format.
+   * @throws {Error} If the public key is not initialized (i.e., if `init()` or `generateKeyPair()` has not been called).
+   */
+  #encrypt(data) {
+    const forge = this.#getNodeForge();
+    if (!this.publicKey)
+      throw new Error('Public key is not initialized. Call init() or generateKeyPair() first.');
+    const encrypted = this.publicKey.encrypt(data, this.cryptoType);
+    return forge.util.encode64(encrypted);
+  }
+
+  /**
+   * @param {Base64} encryptedBase64 - The encrypted JSON string in Base64 format to be decrypted.
+   * @returns {*} The decrypted JSON object.
+   * @throws {Error} If the private key is not initialized.
+   */
+  #decrypt(encryptedBase64) {
+    const forge = this.#getNodeForge();
+    if (!this.privateKey) throw new Error('Private key is required for decryption');
+    const data = forge.util.decode64(encryptedBase64);
+    const decrypted = this.privateKey.decrypt(data, this.cryptoType);
+    return decrypted;
+  }
+
+  /**
    * Encrypts a JSON object using the initialized public key.
    *
    * This method serializes the provided JSON object to a string and encrypts it using the
@@ -504,12 +578,7 @@ class TinyCertCrypto {
    * @throws {Error} If the public key is not initialized (i.e., if `init()` or `generateKeyPair()` has not been called).
    */
   encryptJson(jsonObject) {
-    const forge = this.#getNodeForge();
-    if (!this.publicKey)
-      throw new Error('Public key is not initialized. Call init() or generateKeyPair() first.');
-    const jsonString = JSON.stringify(jsonObject);
-    const encrypted = this.publicKey.encrypt(jsonString, this.cryptoType);
-    return forge.util.encode64(encrypted);
+    return this.#encrypt(JSON.stringify(jsonObject));
   }
 
   /**
@@ -523,11 +592,57 @@ class TinyCertCrypto {
    * @throws {Error} If the private key is not initialized.
    */
   decryptToJson(encryptedBase64) {
-    const forge = this.#getNodeForge();
-    if (!this.privateKey) throw new Error('Private key is required for decryption');
-    const data = forge.util.decode64(encryptedBase64);
-    const decrypted = this.privateKey.decrypt(data, this.cryptoType);
-    return JSON.parse(decrypted);
+    return JSON.parse(this.#decrypt(encryptedBase64));
+  }
+
+  /**
+   * @typedef {Object} EncryptedDataParamsNoKeys
+   * @property {Base64} auth - The Initialization Vector (IV) encrypted by the TinyCertCrypto used in encryption, encoded with the output encoding.
+   * @property {string} encrypted - The encrypted data to decrypt, encoded with the output encoding.
+   */
+
+  /**
+   * @typedef {Object} EncryptedDataParams
+   * @property {Base64} auth - The Initialization Vector (IV) encrypted by the TinyCertCrypto used in encryption, encoded with the output encoding.
+   * @property {string} iv - The Initialization Vector (IV) used in encryption, encoded with the output encoding.
+   * @property {string} encrypted - The encrypted data to decrypt, encoded with the output encoding.
+   * @property {string} authTag - The authentication tag used to verify the integrity of the encrypted data.
+   */
+
+  /**
+   * Encrypts a value using the initialized public key.
+   *
+   * This method serializes the provided value to a string and encrypts it using the
+   * public key in PEM format. The encryption is done using the algorithm defined in the
+   * `cryptoType` property (e.g., 'RSA-OAEP').
+   *
+   * @param {*} data - The value to be encrypted.
+   * @returns {EncryptedDataParams} The encrypted value, encoded in Base64 format.
+   * @throws {Error} If the public key is not initialized (i.e., if `init()` or `generateKeyPair()` has not been called).
+   */
+  encrypt(data) {
+    const tinyCrypto = this.getCrypto();
+    const { iv, encrypted, authTag } = tinyCrypto.encrypt(data);
+    const auth = this.#encrypt(tinyCrypto.getKey());
+    return { auth, iv, authTag, encrypted };
+  }
+
+  /**
+   * Decrypts a Base64-encoded encrypted value using the initialized private key.
+   *
+   * This method takes the encrypted Base64 string, decodes it, and decrypts it using the
+   * private key in PEM format. It then parses the decrypted string back into a value.
+   *
+   * @param {EncryptedDataParams} params - The encrypted value in Base64 format to be decrypted.
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {*} The decrypted value.
+   * @throws {Error} If the private key is not initialized.
+   */
+  decrypt({ auth, iv, authTag, encrypted }, expectedType = null) {
+    const tinyCrypto = this.getCrypto();
+    const hexKey = this.#decrypt(auth);
+    tinyCrypto.setKey(hexKey);
+    return tinyCrypto.decrypt({ iv, encrypted, authTag }, expectedType);
   }
 
   /**
@@ -538,16 +653,14 @@ class TinyCertCrypto {
    * `cryptoType` property (e.g., 'RSA-OAEP').
    *
    * @param {*} data - The value to be encrypted.
-   * @returns {Base64} The encrypted value, encoded in Base64 format.
+   * @returns {EncryptedDataParamsNoKeys} The encrypted value, encoded in Base64 format.
    * @throws {Error} If the public key is not initialized (i.e., if `init()` or `generateKeyPair()` has not been called).
    */
-  encrypt(data) {
-    const forge = this.#getNodeForge();
-    if (!this.publicKey)
-      throw new Error('Public key is not initialized. Call init() or generateKeyPair() first.');
-    const plainText = this.#parser.serialize(data);
-    const encrypted = this.publicKey.encrypt(plainText, this.cryptoType);
-    return forge.util.encode64(encrypted);
+  encryptWithoutKey(data) {
+    const tinyCrypto = this.getCrypto();
+    const { iv, encrypted, authTag } = tinyCrypto.encrypt(data);
+    const auth = this.#encrypt(JSON.stringify({ iv, authTag }));
+    return { auth, encrypted };
   }
 
   /**
@@ -556,18 +669,15 @@ class TinyCertCrypto {
    * This method takes the encrypted Base64 string, decodes it, and decrypts it using the
    * private key in PEM format. It then parses the decrypted string back into a value.
    *
-   * @param {Base64} encryptedBase64 - The encrypted value in Base64 format to be decrypted.
+   * @param {EncryptedDataParamsNoKeys} params - The encrypted value in Base64 format to be decrypted.
    * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
    * @returns {*} The decrypted value.
    * @throws {Error} If the private key is not initialized.
    */
-  decrypt(encryptedBase64, expectedType = null) {
-    const forge = this.#getNodeForge();
-    if (!this.privateKey) throw new Error('Private key is required for decryption');
-    const data = forge.util.decode64(encryptedBase64);
-    const decrypted = this.privateKey.decrypt(data, this.cryptoType);
-    const { value } = this.#parser.deserialize(decrypted, expectedType);
-    return value;
+  decryptWithoutKey({ auth, encrypted }, expectedType = null) {
+    const tinyCrypto = this.getCrypto();
+    const { iv, authTag } = JSON.parse(this.#decrypt(auth));
+    return tinyCrypto.decrypt({ iv, encrypted, authTag }, expectedType);
   }
 
   /**
