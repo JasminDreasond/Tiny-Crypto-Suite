@@ -47,34 +47,67 @@ Initializes the certificate and key system from files, memory buffers, or URLs.
 
 ### 🔥 `startCrypto(tinyCrypto?)`
 
-Starts the internal TinyCrypto instance.
+Starts the internal `TinyCrypto` instance.
 
-- If an internal TinyCrypto instance is already set, an error will be thrown to prevent overriding it.
-- If no instance is provided, a new one will be automatically created.
+This method initializes the `TinyCrypto` module. If no instance is provided, it will automatically create a new one.  
+If an instance is already set, it will throw an error to prevent overwriting the existing module.
 
-| Parameter   | Type        | Description                                           |
-| ----------- | ----------- | ----------------------------------------------------- |
-| `tinyCrypto` | `TinyCrypto` | *(Optional)* The TinyCrypto instance to initialize. |
+```js
+instance.startCrypto();
+// or
+instance.startCrypto(myCustomTinyCrypto);
+```
 
-| Throws       | Description |
-| ------------ | ----------- |
-| `Error` | If the TinyCrypto instance has already been set. |
+#### Parameters:
+- **`tinyCrypto`** (`TinyCrypto`) *(Optional)*: An external `TinyCrypto` instance to initialize. If omitted, a new instance will be created automatically.
+
+#### Throws:
+- **`Error`**: If the `TinyCrypto` instance has already been set.
+
+#### Example:
+
+```js
+try {
+  instance.startCrypto();
+  console.log("TinyCrypto started successfully!");
+} catch (error) {
+  console.error(error.message);
+}
+```
+
+This method ensures that the cryptographic operations have a properly initialized environment before they are used.
 
 ---
 
 ### 📦 `getCrypto()`
 
-Returns the previously loaded TinyCrypto instance.
+Returns the previously loaded `TinyCrypto` instance.
 
-- Assumes the module has already been started using `startCrypto()`.
+This method retrieves the internal `TinyCrypto` module after it has been started using `startCrypto()`.  
+If the module has not been started yet, it will throw an error.
 
-| Returns | Type        | Description               |
-| ------- | ----------- | ------------------------- |
-|         | `TinyCrypto` | The TinyCrypto module instance. |
+```js
+const cryptoModule = instance.getCrypto();
+```
 
-| Throws       | Description |
-| ------------ | ----------- |
-| `Error` | If the TinyCrypto instance is `undefined` or `null`, meaning it was not properly started. |
+#### Returns:
+- **`TinyCrypto`**: The initialized `TinyCrypto` module instance.
+
+#### Throws:
+- **`Error`**: If the `TinyCrypto` instance is `undefined` or `null`, indicating it has not been properly started.
+
+#### Example:
+
+```js
+try {
+  const crypto = instance.getCrypto();
+  console.log("TinyCrypto is ready to use!", crypto);
+} catch (error) {
+  console.error(error.message);
+}
+```
+
+This method is essential for safely accessing the `TinyCrypto` instance after it has been initialized.
 
 ---
 
