@@ -14,16 +14,6 @@ It ensures data safety for encryption 🔒, transmission 📡, or storage 💾.
 
 ---
 
-## 📦 Installation
-
-```bash
-npm install tiny-essentials
-```
-
-Make sure you also have a polyfill for `Buffer` if used in browsers.
-
----
-
 ## 🔥 Usage Example
 
 ```javascript
