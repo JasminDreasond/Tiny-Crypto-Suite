@@ -45,6 +45,39 @@ Initializes the certificate and key system from files, memory buffers, or URLs.
 
 ---
 
+### 🔥 `startCrypto(tinyCrypto?)`
+
+Starts the internal TinyCrypto instance.
+
+- If an internal TinyCrypto instance is already set, an error will be thrown to prevent overriding it.
+- If no instance is provided, a new one will be automatically created.
+
+| Parameter   | Type        | Description                                           |
+| ----------- | ----------- | ----------------------------------------------------- |
+| `tinyCrypto` | `TinyCrypto` | *(Optional)* The TinyCrypto instance to initialize. |
+
+| Throws       | Description |
+| ------------ | ----------- |
+| `Error` | If the TinyCrypto instance has already been set. |
+
+---
+
+### 📦 `getCrypto()`
+
+Returns the previously loaded TinyCrypto instance.
+
+- Assumes the module has already been started using `startCrypto()`.
+
+| Returns | Type        | Description               |
+| ------- | ----------- | ------------------------- |
+|         | `TinyCrypto` | The TinyCrypto module instance. |
+
+| Throws       | Description |
+| ------------ | ----------- |
+| `Error` | If the TinyCrypto instance is `undefined` or `null`, meaning it was not properly started. |
+
+---
+
 ### 🔐 `existsCrypto()`
 
 Checks if the `TinyCrypto` instance has been set.
