@@ -117,9 +117,18 @@ class TinyCertCrypto {
    */
   async #fetchNodeForge() {
     if (!this.forge) {
-      const forge = await import(/* webpackMode: "eager" */ 'node-forge');
-      // @ts-ignore
-      this.forge = forge?.default ?? forge;
+      const forge = await import(/* webpackMode: "eager" */ 'node-forge').catch(() => {
+        console.warn(
+          '[TinyCertCrypto] Warning: "node-forge" is not installed. ' +
+            'TinyCertCrypto requires "node-forge" to function properly. ' +
+            'Please install it with "npm install node-forge" if you intend to use certificate-related features.',
+        );
+        return null;
+      });
+      if (forge) {
+        // @ts-ignore
+        this.forge = forge?.default ?? forge;
+      }
     }
     return this.#getNodeForge();
   }
@@ -141,9 +150,9 @@ class TinyCertCrypto {
    * @returns {NodeForge} The `node-forge` module.
    */
   #getNodeForge() {
-    if (typeof this.forge === 'undefined')
+    if (typeof this.forge === 'undefined' || this.forge === null)
       throw new Error(
-        'Failed to initialize Forge: Module is undefined.\n' +
+        `Failed to initialize Forge: Module is ${this.forge !== null ? 'undefined' : 'null'}.\n` +
           'Please make sure "node-forge" is installed.\n' +
           'You can install it by running: npm install node-forge',
       );
