@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { Buffer } from 'buffer';
 
 import { isBrowser } from './lib/os.mjs';
-import TinyCryptoParse from './lib/TinyCryptoParse.mjs';
+import TinyCryptoParser from './lib/TinyCryptoParser.mjs';
 
 /**
  * TinyCrypto is a utility class that provides methods for secure key generation,
@@ -14,7 +14,11 @@ import TinyCryptoParse from './lib/TinyCryptoParse.mjs';
  * @class
  */
 class TinyCrypto {
-  #parse = new TinyCryptoParse();
+  /**
+   * Important instance used to validate values.
+   * @type {TinyCryptoParser}
+   */
+  #parser = new TinyCryptoParser();
 
   /**
    * Creates a new instance of the CryptoManager class with configurable options.
@@ -91,7 +95,7 @@ class TinyCrypto {
    * // }
    */
   encrypt(data, iv = this.generateIV()) {
-    const plainText = this.#parse.serialize(data);
+    const plainText = this.#parser.serialize(data);
 
     const cipher = createCipheriv(this.algorithm, this.key, iv, {
       // @ts-ignore
@@ -157,9 +161,8 @@ class TinyCrypto {
     /** @type {string} */
     // @ts-ignore
     let decrypted = decipher.update(encryptedBuffer, null, this.inputEncoding);
-    // @ts-ignore
     decrypted += decipher.final(this.inputEncoding);
-    const { value } = this.#parse.deserialize(decrypted, expectedType);
+    const { value } = this.#parser.deserialize(decrypted, expectedType);
     return value;
   }
 
@@ -198,7 +201,7 @@ class TinyCrypto {
     // @ts-ignore
     decrypted += decipher.final(this.inputEncoding);
 
-    const { type } = this.#parse.deserialize(decrypted);
+    const { type } = this.#parser.deserialize(decrypted);
     return typeof type === 'string' ? type : 'unknown';
   }
 

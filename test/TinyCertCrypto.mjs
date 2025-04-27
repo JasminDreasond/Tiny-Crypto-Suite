@@ -40,11 +40,23 @@ const testWithInstance = async (cryptoInstance, title = 'Instance') => {
     favoritePony: 'Fluttershy',
   };
 
+  const testData2 = {
+    name: 'Pudding',
+    isBrony: false,
+    favoritePony: 'Pinkie Pie',
+  };
+
   const encrypted = await cryptoInstance.encryptJson(testData);
   console.log('📦 Encrypted Base64:', encrypted);
 
   const decrypted = await cryptoInstance.decryptToJson(encrypted);
   console.log('✅ Decrypted JSON:', decrypted);
+
+  const encrypted2 = await cryptoInstance.encrypt(testData2);
+  console.log('📦 Encrypted Base64 2:', encrypted2);
+
+  const decrypted2 = await cryptoInstance.decrypt(encrypted2);
+  console.log('✅ Decrypted JSON 2:', decrypted2);
 
   console.log('🔍 Extracting certificate metadata...');
   const metadata = cryptoInstance.extractCertMetadata();

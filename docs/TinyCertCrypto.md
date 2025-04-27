@@ -78,6 +78,26 @@ const json = instance.decryptToJson(encrypted);
 
 ---
 
+### 🛡️ `encrypt(data)`
+
+Encrypts a value and returns a **Base64-encoded string**.
+
+```js
+const result = instance.encrypt('Hello!');
+```
+
+---
+
+### 🔓 `decrypt(data, expectedType?)`
+
+Decrypts a previously encrypted value and returns the original data. You can optionally pass an `expectedType` to validate it.
+
+```js
+const plain = instance.decrypt(result, 'string');
+```
+
+---
+
 ### 🔍 `hasKeys()`
 Returns `true` if both `publicKey` and `privateKey` are loaded.
 

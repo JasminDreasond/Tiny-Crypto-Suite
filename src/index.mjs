@@ -1,5 +1,5 @@
 import TinyCrypto from './TinyCrypto.mjs';
 import TinyCertCrypto from './TinyCertCrypto.mjs';
-import TinyCryptoParse from './lib/TinyCryptoParse.mjs';
+import TinyCryptoParser from './lib/TinyCryptoParser.mjs';
 
-export { TinyCrypto, TinyCertCrypto, TinyCryptoParse };
+export { TinyCrypto, TinyCertCrypto, TinyCryptoParser };

@@ -1,7 +1,21 @@
 import { Buffer } from 'buffer';
 import { objType } from 'tiny-essentials';
 
-class TinyCryptoParse {
+/**
+ * TinyCryptoParser provides serialization and deserialization utilities for complex JavaScript data types.
+ *
+ * This class enables conversion of various JavaScript values (such as `Map`, `Set`, `Buffer`, `Date`, `BigInt`, `Symbol`, `HTMLElement`, and others)
+ * into JSON-compatible formats, allowing safe encryption, transmission, or storage.
+ * It also supports deserialization, restoring the original JavaScript objects from the serialized data.
+ *
+ * Unsupported types like `WeakMap`, `WeakSet`, `Promise`, and `Function` will throw explicit errors when an attempt is made to serialize them.
+ *
+ * It includes built-in validation to ensure the integrity of types during deserialization, providing stronger consistency guarantees
+ * when handling critical data transformations.
+ *
+ * @class
+ */
+class TinyCryptoParser {
   /**
    * A mapping of data types to their serialization functions.
    *
@@ -184,4 +198,4 @@ class TinyCryptoParse {
   }
 }
 
-export default TinyCryptoParse;
+export default TinyCryptoParser;

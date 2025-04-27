@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { Buffer } from 'buffer';
 import clone from 'clone';
 import { isBrowser } from './lib/os.mjs';
+import TinyCryptoParser from './lib/TinyCryptoParser.mjs';
 
 /**
  * Class representing a certificate and key management utility.
@@ -28,6 +29,12 @@ class TinyCertCrypto {
   /** @type {Certificate|null} */ publicCert = null;
   /** @type {Record<string, any>|null} */ metadata = null;
   /** @type {string|null} */ source = null;
+
+  /**
+   * Important instance used to validate values.
+   * @type {TinyCryptoParser}
+   */
+  #parser = new TinyCryptoParser();
 
   /**
    * Regular expression for matching X.509 PEM certificates.
@@ -512,6 +519,46 @@ class TinyCertCrypto {
     const data = forge.util.decode64(encryptedBase64);
     const decrypted = this.privateKey.decrypt(data, this.cryptoType);
     return JSON.parse(decrypted);
+  }
+
+  /**
+   * Encrypts a value using the initialized public key.
+   *
+   * This method serializes the provided value to a string and encrypts it using the
+   * public key in PEM format. The encryption is done using the algorithm defined in the
+   * `cryptoType` property (e.g., 'RSA-OAEP').
+   *
+   * @param {*} data - The value to be encrypted.
+   * @returns {Base64} The encrypted value, encoded in Base64 format.
+   * @throws {Error} If the public key is not initialized (i.e., if `init()` or `generateKeyPair()` has not been called).
+   */
+  encrypt(data) {
+    const forge = this.#getNodeForge();
+    if (!this.publicKey)
+      throw new Error('Public key is not initialized. Call init() or generateKeyPair() first.');
+    const plainText = this.#parser.serialize(data);
+    const encrypted = this.publicKey.encrypt(plainText, this.cryptoType);
+    return forge.util.encode64(encrypted);
+  }
+
+  /**
+   * Decrypts a Base64-encoded encrypted value using the initialized private key.
+   *
+   * This method takes the encrypted Base64 string, decodes it, and decrypts it using the
+   * private key in PEM format. It then parses the decrypted string back into a value.
+   *
+   * @param {Base64} encryptedBase64 - The encrypted value in Base64 format to be decrypted.
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {*} The decrypted value.
+   * @throws {Error} If the private key is not initialized.
+   */
+  decrypt(encryptedBase64, expectedType = null) {
+    const forge = this.#getNodeForge();
+    if (!this.privateKey) throw new Error('Private key is required for decryption');
+    const data = forge.util.decode64(encryptedBase64);
+    const decrypted = this.privateKey.decrypt(data, this.cryptoType);
+    const { value } = this.#parser.deserialize(decrypted, expectedType);
+    return value;
   }
 
   /**
