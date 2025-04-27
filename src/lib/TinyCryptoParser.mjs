@@ -17,6 +17,12 @@ import { objType } from 'tiny-essentials';
  */
 class TinyCryptoParser {
   /**
+   * @typedef {Object} DeserializedData
+   * @property {any} value - The deserialized value, which can be any JavaScript type.
+   * @property {string} type - The type of the deserialized data (e.g., 'object', 'array', 'string', etc.).
+   */
+
+  /**
    * A mapping of data types to their serialization functions.
    *
    * This object defines how various JavaScript types should be serialized to a JSON-compatible format.
@@ -174,7 +180,7 @@ class TinyCryptoParser {
    *
    * @param {string} text - The serialized data to be deserialized.
    * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
-   * @returns {{value: any, type: string}} An object containing the deserialized value and its type.
+   * @returns {DeserializedData} An object containing the deserialized value and its type.
    * @throws {Error} If deserialization fails due to an invalid or unknown type.
    */
   deserialize(text, expectedType = null) {
@@ -195,6 +201,68 @@ class TinyCryptoParser {
 
     if (expectedType) this.#validateDeserializedType(expectedType, result.type);
     return result;
+  }
+
+  /**
+   * Recursively serializes a given data value into a JSON-compatible format.
+   * If the data is an object or array, it will traverse each entry and serialize them individually.
+   *
+   * @param {any} data - The data to be deeply serialized.
+   * @returns {string} The deeply serialized data in JSON format.
+   * @throws {Error} If the data type is unsupported for serialization.
+   */
+  serializeDeep(data) {
+    const type = objType(data) || 'undefined';
+
+    if (type === 'object') {
+      /** @type {Record<string|number, any>} */
+      const result = {};
+      for (const key in data)
+        if (Object.hasOwn(data, key)) result[key] = this.serializeDeep(data[key]);
+      return this.serialize(result);
+    }
+
+    if (type === 'array') {
+      const result = data.map(/** @param {*} item */ (item) => this.serializeDeep(item));
+      return this.serialize(result);
+    }
+
+    return this.serialize(data);
+  }
+
+  /**
+   * Recursively deserializes a string back into its original value format.
+   * If the data is an object or array, it will traverse each entry and deserialize them individually.
+   *
+   * @param {string} text - The serialized data to be deeply deserialized.
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data.
+   * @returns {DeserializedData} An object containing the deserialized value and its type.
+   * @throws {Error} If deserialization fails due to an invalid or unknown type.
+   */
+  deserializeDeep(text, expectedType = null) {
+    const { value, type } = this.deserialize(text, expectedType);
+    /** @type {DeserializedData} */
+    const tinyResult = { value: null, type };
+
+    // Object
+    if (type === 'object') {
+      /** @type {Record<string|number, any>} */
+      const result = {};
+      for (const key in value)
+        if (Object.hasOwn(value, key)) result[key] = this.deserializeDeep(value[key]).value;
+      tinyResult.value = result;
+    }
+
+    // Array
+    else if (type === 'array')
+      tinyResult.value = value.map(
+        /** @param {*} item */ (item) => this.deserializeDeep(item).value,
+      );
+    // Normal
+    else tinyResult.value = value;
+
+    // Complete
+    return tinyResult;
   }
 }
 

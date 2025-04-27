@@ -21,6 +21,27 @@ class TinyCrypto {
   #parser = new TinyCryptoParser();
 
   /**
+   * Indicates whether the serialization or deserialization should be performed deeply.
+   * @type {boolean}
+   */
+  isDeep = true;
+
+  /**
+   * Sets the deep serialization and deserialization mode.
+   * If the argument is a boolean, updates the deep mode accordingly.
+   * Throws an error if the value is not a boolean.
+   *
+   * @param {boolean} value - A boolean indicating whether deep mode should be enabled.
+   * @throws {TypeError} Throws if the provided value is not a boolean.
+   */
+  setDeepMode(value) {
+    if (typeof value !== 'boolean')
+      throw new TypeError('The value provided to setDeepMode must be a boolean.');
+
+    this.isDeep = value;
+  }
+
+  /**
    * Creates a new instance of the CryptoManager class with configurable options.
    *
    * @param {Object} [options={}] - Configuration options for encryption and decryption.
@@ -95,7 +116,7 @@ class TinyCrypto {
    * // }
    */
   encrypt(data, iv = this.generateIV()) {
-    const plainText = this.#parser.serialize(data);
+    const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
 
     const cipher = createCipheriv(this.algorithm, this.key, iv, {
       // @ts-ignore
@@ -162,7 +183,9 @@ class TinyCrypto {
     // @ts-ignore
     let decrypted = decipher.update(encryptedBuffer, null, this.inputEncoding);
     decrypted += decipher.final(this.inputEncoding);
-    const { value } = this.#parser.deserialize(decrypted, expectedType);
+    const { value } = this.isDeep
+      ? this.#parser.deserializeDeep(decrypted, expectedType)
+      : this.#parser.deserialize(decrypted, expectedType);
     return value;
   }
 

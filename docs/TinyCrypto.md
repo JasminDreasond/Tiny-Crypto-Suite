@@ -64,7 +64,7 @@ Does NOT support:
 
 ---
 
-### `encrypt(data, iv?)`
+### 🔒 `encrypt(data, iv?)`
 
 Encrypts a value and returns an object with `{ iv, encrypted, authTag }`.
 
@@ -74,7 +74,7 @@ const result = crypto.encrypt('Hello!');
 
 ---
 
-### `decrypt({ iv, encrypted, authTag }, expectedType?)`
+### 🔓 `decrypt({ iv, encrypted, authTag }, expectedType?)`
 
 Decrypts a previously encrypted value and returns the original data. You can optionally pass an `expectedType` to validate it.
 
@@ -84,49 +84,49 @@ const plain = crypto.decrypt(result, 'string');
 
 ---
 
-### `getTypeFromEncrypted({ iv, encrypted, authTag })`
+### 🔎 `getTypeFromEncrypted({ iv, encrypted, authTag })`
 
 Returns the type name of the encrypted data without fully decrypting it.
 
 ---
 
-### `generateKey(length = 32)`
+### 🔑 `generateKey(length = 32)`
 
 Generates a secure random key. Default: 32 bytes (AES-256).
 
 ---
 
-### `generateIV(length = 12)`
+### 🧬 `generateIV(length = 12)`
 
 Generates a secure random IV. Default: 12 bytes (GCM standard).
 
 ---
 
-### `saveKeyToFile(filename = 'secret.key')`
+### 💾 `saveKeyToFile(filename = 'secret.key')`
 
 Saves the current key to a file (browser: prompts download).
 
 ---
 
-### `loadKeyFromFile(file)`
+### 📂 `loadKeyFromFile(file)`
 
 Loads a key from a file (browser: File object, Node: file path).
 
 ---
 
-### `saveConfigToFile(filename = 'crypto-config.json')`
+### 💾 `saveConfigToFile(filename = 'crypto-config.json')`
 
 Saves the current configuration as JSON.
 
 ---
 
-### `loadConfigFromFile(file)`
+### 📂 `loadConfigFromFile(file)`
 
 Loads configuration from a JSON file.
 
 ---
 
-### `exportConfig()`
+### 📦 `exportConfig()`
 
 Returns an object with the current settings:
 
@@ -142,9 +142,14 @@ Returns an object with the current settings:
 
 ---
 
-### `importConfig(config)`
+### 🚀 `importConfig(config)`
 
 Applies a configuration object. Throws if invalid types are provided.
+
+---
+
+### 🔧 `setDeepMode(value)`
+Sets the behavior for deep serialization and deserialization.
 
 ---
 

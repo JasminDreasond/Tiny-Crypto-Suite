@@ -24,6 +24,19 @@ const testValues = [
   { label: 'Array', value: [1, 2, 3] },
   { label: 'Object', value: { name: 'Yasmin', age: 23 } },
   {
+    label: 'Multi Object',
+    value: {
+      name: 'Yasmin',
+      age: 23,
+      inventory: ['pudding', 'ponies'],
+      keys: { isPudding: true, secret: [1, 2], secret2: { 1: true, 2: false } },
+      map: new Map([
+        ['pudding', 'chocolate'],
+        ['pony', 'mio'],
+      ]),
+    },
+  },
+  {
     label: 'Map',
     value: new Map([
       ['key1', 'value1'],
