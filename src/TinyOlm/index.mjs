@@ -11,16 +11,34 @@ class TinyOlm {
    * Creates a new TinyOlm instance for a specific username.
    *
    * @param {string} username - The username to associate with the account and sessions.
+   * @param {string} deviceId - The device id to associate with the account and sessions.
    */
-  constructor(username) {
+  constructor(username, deviceId) {
     /** @type {string} */
     this.username = username;
+
+    /** @type {string} */
+    this.deviceId = deviceId;
 
     /** @type {Olm.Account|null} */
     this.account = null;
 
     /** @type {Map<string, Olm.Session>} */
     this.sessions = new Map();
+  }
+
+  /**
+   * Validates that a given username follows the Matrix user ID format.
+   *
+   * A valid Matrix user ID must start with '@', contain at least one character,
+   * then a ':', followed by at least one character (e.g., "@user:domain.com").
+   *
+   * @param {string} username - The Matrix user ID to validate.
+   * @throws {Error} Throws an error if the username does not match the expected format.
+   * @returns {void}
+   */
+  checkUsername(username) {
+    if (!/^@.+:.+$/.test(username)) throw new Error('Invalid Matrix user ID format.');
   }
 
   /**
@@ -121,6 +139,7 @@ class TinyOlm {
    */
   createOutboundSession(theirIdentityKey, theirOneTimeKey, theirUsername) {
     if (!this.account) throw new Error('Account is not initialized.');
+    if (!theirOneTimeKey) throw new Error('No one-time key available for the user.');
     const Olm = tinyOlm.getOlm();
     const session = new Olm.Session();
     session.create_outbound(this.account, theirIdentityKey, theirOneTimeKey);
@@ -156,11 +175,123 @@ class TinyOlm {
   }
 
   /**
+   * Exports the device identity keys and available one-time keys format.
+   *
+   * @returns {object}
+   * @throws {Error} Throws an error if account is not initialized.
+   */
+  exportIdentityAndOneTimeKeys() {
+    if (!this.account) throw new Error('Account is not initialized.');
+    const identityKeys = this.getIdentityKeys();
+    const oneTimeKeys = this.getOneTimeKeys();
+
+    return {
+      device_id: this.deviceId,
+      user_id: this.username,
+      algorithms: ['m.olm.v1.curve25519-aes-sha2'],
+      keys: {
+        [`curve25519:${this.deviceId}`]: identityKeys.curve25519,
+        [`ed25519:${this.deviceId}`]: identityKeys.ed25519,
+      },
+      signatures: {
+        [this.username]: {
+          [`ed25519:${this.deviceId}`]: this.account.sign(
+            JSON.stringify({
+              algorithms: ['m.olm.v1.curve25519-aes-sha2'],
+              device_id: this.deviceId,
+              user_id: this.username,
+              keys: {
+                [`curve25519:${this.deviceId}`]: identityKeys.curve25519,
+                [`ed25519:${this.deviceId}`]: identityKeys.ed25519,
+              },
+            }),
+          ),
+        },
+      },
+      one_time_keys: Object.entries(oneTimeKeys.curve25519).reduce(
+        /**
+         * @param {*} obj
+         * @param {[any, any]} param0
+         * @returns {*}
+         */
+        (obj, [keyId, key]) => {
+          obj[`curve25519:${keyId}`] = key;
+          return obj;
+        },
+        {},
+      ),
+    };
+  }
+
+  /**
+   * Disposes the instance by clearing all sessions and the account.
+   *
+   * @returns {void}
+   */
+  dispose() {
+    for (const session of this.sessions.values()) {
+      session.free();
+    }
+    this.sessions.clear();
+    if (this.account) {
+      this.account.free();
+      this.account = null;
+    }
+  }
+
+  /**
+   * Regenerates the identity keys by creating a new account.
+   *
+   * This process will:
+   * - Free the current Olm.Account and create a new one.
+   * - Generate new curve25519 and ed25519 identity keys.
+   *
+   * Important: After regenerating the identity keys, you must:
+   * - Generate new one-time keys by calling `generateOneTimeKeys()`.
+   * - Mark the keys as published by calling `markKeysAsPublished()`.
+   * - Update your device information on the server to broadcast the new keys.
+   *
+   * @returns {Promise<void>}
+   */
+  async regenerateIdentityKeys() {
+    if (this.account) this.account.free();
+    const Olm = await tinyOlm.fetchOlm();
+    this.account = new Olm.Account();
+    this.account.create();
+  }
+
+  /**
+   * @typedef {Object} EncryptedMessage
+   * @property {0 | 1} type - The type of the message (0 for pre-key, 1 for message).
+   * @property {string} body - The encrypted message body.
+   */
+
+  /**
+   * Creates an encrypted event structure for sending a message to a device.
+   *
+   * @param {EncryptedMessage} encrypted - The encrypted message details.
+   * @param {string} toDeviceCurve25519Key - The recipient's Curve25519 key for encryption.
+   * @returns {object} The encrypted message event ready to be sent.
+   */
+  getEncryptEvent(encrypted, toDeviceCurve25519Key) {
+    return {
+      algorithm: 'm.olm.v1.curve25519-aes-sha2',
+      sender_key: this.getIdentityKeys().curve25519,
+      ciphertext: {
+        [toDeviceCurve25519Key]: {
+          type: encrypted.type,
+          body: encrypted.body,
+        },
+      },
+    };
+  }
+
+  /**
    * Encrypts a plaintext message to a specified user.
    *
    * @param {string} toUsername - The username of the recipient.
    * @param {string} plaintext - The plaintext message to encrypt.
-   * @returns {{ type: 0 | 1; body: string}} The encrypted message.
+   * @returns {EncryptedMessage} The encrypted message.
    * @throws {Error} Throws an error if no session exists with the given username.
    */
   encryptMessage(toUsername, plaintext) {
@@ -181,7 +312,10 @@ class TinyOlm {
   decryptMessage(fromUsername, messageType, ciphertext) {
     const session = this.sessions.get(fromUsername);
     if (!session) throw new Error(`No session found with ${fromUsername}`);
-    return session.decrypt(messageType, ciphertext);
+    const plaintext = session.decrypt(messageType, ciphertext);
+    // After decrypting, consider the session updated (ratcheted)
+    session.has_received_message();
+    return plaintext;
   }
 }
 
