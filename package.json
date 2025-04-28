@@ -5,8 +5,11 @@
   "scripts": {
     "test": "npm run test:mjs && npm run test:cjs && npm run test:js",
     "test:js": "npx babel-node test/index.js",
-    "test:mjs": "node test/index.mjs",
     "test:cjs": "node test/index.cjs",
+    "test:mjs": "node test/index.mjs",
+    "test:mjs:tiny": "node test/index.mjs tinyCrypto",
+    "test:mjs:cert": "node test/index.mjs certCrypto",
+    "test:mjs:olm": "node test/index.mjs olm",
     "fix:prettier": "npm run fix:prettier:src && npm run fix:prettier:test && npm run fix:prettier:rollup.config && npm run fix:prettier:webpack.config",
     "fix:prettier:src": "prettier --write ./src/*",
     "fix:prettier:test": "prettier --write ./test/*",

@@ -64,7 +64,12 @@ async function simulateMatrixCommunication() {
   const plaintextMessage1 = 'Hello Bob! 👋';
   const encryptedForBob1 = alice.encryptMessage('bob', plaintextMessage1);
 
-  console.log(boxMessage(`${aliceTag} ${YELLOW}Encrypted for Bob${RESET}`, JSON.stringify(encryptedForBob1, null, 2)));
+  console.log(
+    boxMessage(
+      `${aliceTag} ${YELLOW}Encrypted for Bob${RESET}`,
+      JSON.stringify(encryptedForBob1, null, 2),
+    ),
+  );
 
   console.log(divider());
 
@@ -87,7 +92,12 @@ async function simulateMatrixCommunication() {
   const replyMessage1 = 'Hi Alice! 📨 How are you?';
   const encryptedForAlice1 = bob.encryptMessage('alice', replyMessage1);
 
-  console.log(boxMessage(`${bobTag} ${YELLOW}Encrypted for Alice${RESET}`, JSON.stringify(encryptedForAlice1, null, 2)));
+  console.log(
+    boxMessage(
+      `${bobTag} ${YELLOW}Encrypted for Alice${RESET}`,
+      JSON.stringify(encryptedForAlice1, null, 2),
+    ),
+  );
 
   console.log(divider());
 
@@ -109,7 +119,12 @@ async function simulateMatrixCommunication() {
   const plaintextMessage2 = "I'm good, thanks! 🌟 Are you coming to the meeting later?";
   const encryptedForBob2 = alice.encryptMessage('bob', plaintextMessage2);
 
-  console.log(boxMessage(`${aliceTag} ${YELLOW}Encrypted for Bob (2)${RESET}`, JSON.stringify(encryptedForBob2, null, 2)));
+  console.log(
+    boxMessage(
+      `${aliceTag} ${YELLOW}Encrypted for Bob (2)${RESET}`,
+      JSON.stringify(encryptedForBob2, null, 2),
+    ),
+  );
 
   console.log(divider());
 
@@ -127,7 +142,12 @@ async function simulateMatrixCommunication() {
   const replyMessage2 = "Yes! 🕘 I'll be there at 9 PM.";
   const encryptedForAlice2 = bob.encryptMessage('alice', replyMessage2);
 
-  console.log(boxMessage(`${bobTag} ${YELLOW}Encrypted for Alice (2)${RESET}`, JSON.stringify(encryptedForAlice2, null, 2)));
+  console.log(
+    boxMessage(
+      `${bobTag} ${YELLOW}Encrypted for Alice (2)${RESET}`,
+      JSON.stringify(encryptedForAlice2, null, 2),
+    ),
+  );
 
   console.log(divider());
 
@@ -145,7 +165,12 @@ async function simulateMatrixCommunication() {
   const plaintextMessage3 = 'Awesome! See you then! ✨';
   const encryptedForBob3 = alice.encryptMessage('bob', plaintextMessage3);
 
-  console.log(boxMessage(`${aliceTag} ${YELLOW}Encrypted for Bob (3)${RESET}`, JSON.stringify(encryptedForBob3, null, 2)));
+  console.log(
+    boxMessage(
+      `${aliceTag} ${YELLOW}Encrypted for Bob (3)${RESET}`,
+      JSON.stringify(encryptedForBob3, null, 2),
+    ),
+  );
 
   console.log(divider());
 
