@@ -16,6 +16,167 @@ import { objType } from 'tiny-essentials';
  * @class
  */
 class TinyCryptoParser {
+  constructor() {
+    // Regex
+    this.addValueType(
+      'regexp',
+      /**
+       * @param {*} value - The serialized regular expression string.
+       * @returns {RegExp} The deserialized RegExp object.
+       */
+      (value) => {
+        const match = value.match(/^\/(.*)\/([gimsuy]*)$/);
+        return match ? new RegExp(match[1], match[2]) : new RegExp(value);
+      },
+      (data) => ({ __type: 'regexp', value: data.toString() }),
+    );
+
+    // Html
+    this.addValueType(
+      'htmlElement',
+      /**
+       * @param {*} value - The serialized outerHTML string of the HTML element.
+       * @returns {HTMLElement} The deserialized HTML element.
+       * @throws {Error} Throws an error if deserialization is attempted outside the browser environment.
+       */
+      (value) => {
+        if (typeof document === 'undefined')
+          throw new Error('HTMLElement deserialization is only supported in browsers');
+        const div = document.createElement('div');
+        div.innerHTML = value;
+        return div;
+      },
+      (data) => ({ __type: 'htmlelement', value: data.outerHTML }),
+    );
+
+    // Date
+    this.addValueType(
+      'date',
+      /**
+       * @param {*} value - The ISO string representation of the date.
+       * @returns {Date} The deserialized Date object.
+       */
+      (value) => new Date(value),
+      (data) => ({ __type: 'date', value: data.toISOString() }),
+    );
+
+    // BigInt
+    this.addValueType(
+      'bigint',
+      /**
+       * @param {*} value - The string representation of the BigInt.
+       * @returns {BigInt} The deserialized BigInt object.
+       */
+      (value) => BigInt(value),
+      (data) => ({ __type: 'bigint', value: data.toString() }),
+    );
+
+    // Number
+    this.addValueType(
+      'number',
+      /**
+       * @param {*} value - The string or numeric representation of the number.
+       * @returns {number} The deserialized number.
+       */
+      (value) => Number(value),
+      (data) => ({ __type: 'number', value: data }),
+    );
+
+    // Boolean
+    this.addValueType(
+      'boolean',
+      /**
+       * @param {*} value - The string representation of the boolean value.
+       * @returns {boolean} The deserialized boolean value.
+       */
+      (value) => Boolean(value),
+      (data) => ({ __type: 'boolean', value: data }),
+    );
+
+    // String
+    this.addValueType(
+      'string',
+      /**
+       * @param {*} value - The serialized string.
+       * @returns {string} The deserialized string.
+       */
+      (value) => String(value),
+      (data) => ({ __type: 'string', value: data }),
+    );
+
+    // Map
+    this.addValueType(
+      'map',
+      /**
+       * @param {*} value - The serialized array of key-value pairs for Map deserialization.
+       * @returns {Map<any, any>} The deserialized Map object.
+       */
+      (value) => new Map(value),
+      (data) => ({
+        __type: 'map',
+        value: Array.from(data.entries()),
+      }),
+    );
+
+    // Set
+    this.addValueType(
+      'set',
+      /**
+       * @param {*} value - The serialized array of values for Set deserialization.
+       * @returns {Set<*>} The deserialized Set object.
+       */
+      (value) => new Set(value),
+      (data) => ({
+        __type: 'set',
+        value: Array.from(data.values()),
+      }),
+    );
+
+    // Symbol
+    this.addValueType(
+      'symbol',
+      /**
+       * @param {*} value - The string description of the symbol.
+       * @returns {Symbol} The deserialized Symbol.
+       */
+      (value) => Symbol(value),
+      (data) => ({ __type: 'symbol', value: data.description }),
+    );
+
+    // Array
+    this.addValueType(
+      'array',
+      /**
+       * @param {*} value - The serialized representation of the array.
+       * @returns {Array<*>} The deserialized array.
+       */
+      (value) => value,
+      (data) => ({ __type: 'array', value: data }),
+    );
+
+    // Object
+    this.addValueType(
+      'object',
+      /**
+       * @param {*} value - The serialized representation of the plain JSON object.
+       * @returns {Record<string|number, any>} The deserialized object.
+       */
+      (value) => value,
+      (data) => ({ __type: 'object', value: data }),
+    );
+
+    // Buffer
+    this.addValueType(
+      'buffer',
+      /**
+       * @param {*} value - The base64-encoded string representation of the buffer.
+       * @returns {Buffer} The deserialized Buffer object.
+       */
+      (value) => Buffer.from(value, 'base64'),
+      (data) => ({ __type: 'buffer', value: data.toString('base64') }),
+    );
+  }
+
   /**
    * @typedef {Object} DeserializedData
    * @property {any} value - The deserialized value, which can be any JavaScript type.
@@ -35,25 +196,6 @@ class TinyCryptoParser {
    * and the value is a function that serializes the data to a specific format.
    *
    * @type {Record<string, (data: any) => SerializedData>}
-   * @property {Function} weakmap - Throws an error as WeakMap cannot be serialized.
-   * @property {Function} weakset - Throws an error as WeakSet cannot be serialized.
-   * @property {Function} promise - Throws an error as Promise cannot be serialized.
-   * @property {Function} function - Throws an error as Function cannot be serialized.
-   * @property {Function} regexp - Serializes RegExp objects to a JSON object with their string representation.
-   * @property {Function} htmlElement - Serializes HTML elements to their outerHTML string.
-   * @property {Function} date - Serializes Date objects to an ISO string format.
-   * @property {Function} bigint - Serializes BigInt objects to their string representation.
-   * @property {Function} number - Serializes numbers to a JSON-compatible format.
-   * @property {Function} boolean - Serializes booleans to a JSON-compatible format.
-   * @property {Function} string - Serializes strings to a JSON-compatible format.
-   * @property {Function} null - Serializes null to a special 'Null' type in JSON.
-   * @property {Function} undefined - Serializes undefined to a special 'Undefined' type in JSON.
-   * @property {Function} map - Serializes Map objects to an array of entries in JSON format.
-   * @property {Function} set - Serializes Set objects to an array of values in JSON format.
-   * @property {Function} symbol - Serializes Symbol objects to a JSON object with the symbol's description.
-   * @property {Function} array - Serializes arrays to a JSON-compatible format.
-   * @property {Function} object - Serializes general objects to a JSON-compatible format.
-   * @property {Function} buffer - Serializes Buffer objects to a base64-encoded string.
    */
   #valueConvertTypes = {
     weakmap: () => {
@@ -68,27 +210,8 @@ class TinyCryptoParser {
     function: () => {
       throw new Error('Function cannot be serialized');
     },
-    regexp: (data) => ({ __type: 'regexp', value: data.toString() }),
-    htmlElement: (data) => ({ __type: 'htmlelement', value: data.outerHTML }),
-    date: (data) => ({ __type: 'date', value: data.toISOString() }),
-    bigint: (data) => ({ __type: 'bigint', value: data.toString() }),
-    number: (data) => ({ __type: 'number', value: data }),
-    boolean: (data) => ({ __type: 'boolean', value: data }),
-    string: (data) => ({ __type: 'string', value: data }),
     null: () => ({ __type: 'null' }),
     undefined: () => ({ __type: 'undefined' }),
-    map: (data) => ({
-      __type: 'map',
-      value: Array.from(data.entries()),
-    }),
-    set: (data) => ({
-      __type: 'set',
-      value: Array.from(data.values()),
-    }),
-    symbol: (data) => ({ __type: 'symbol', value: data.description }),
-    array: (data) => ({ __type: 'array', value: data }),
-    object: (data) => ({ __type: 'object', value: data }),
-    buffer: (data) => ({ __type: 'buffer', value: data.toString('base64') }),
   };
 
   /**
@@ -100,120 +223,12 @@ class TinyCryptoParser {
    * and the value is a function that deserializes the value to its original format.
    *
    * @type {Record<string, (data: any) => any>}
-   * @property {Function} regexp - Deserializes a regular expression from its string representation (e.g., `/pattern/flags`).
-   * @property {Function} htmlelement - Deserializes an HTML element from its serialized outerHTML string (only works in browser environments).
-   * @property {Function} date - Deserializes a date from its ISO string representation.
-   * @property {Function} bigint - Deserializes a BigInt from its string representation.
-   * @property {Function} number - Deserializes a number from its string or numeric representation.
-   * @property {Function} boolean - Deserializes a boolean value from its string representation.
-   * @property {Function} null - Deserializes the `null` value.
-   * @property {Function} undefined - Deserializes the `undefined` value.
-   * @property {Function} map - Deserializes a Map from an array of key-value pairs.
-   * @property {Function} set - Deserializes a Set from an array of values.
-   * @property {Function} symbol - Deserializes a Symbol from its string description.
-   * @property {Function} array - Deserializes an array from its serialized representation.
-   * @property {Function} object - Deserializes a plain JSON object from its serialized representation.
-   * @property {Function} string - Deserializes a string from its serialized representation.
-   * @property {Function} buffer - Deserializes a Buffer from its base64-encoded string representation.
    */
   #valueTypes = {
-    /**
-     * @param {*} value - The serialized regular expression string.
-     * @returns {RegExp} The deserialized RegExp object.
-     */
-    regexp: (value) => {
-      const match = value.match(/^\/(.*)\/([gimsuy]*)$/);
-      return match ? new RegExp(match[1], match[2]) : new RegExp(value);
-    },
-
-    /**
-     * @param {*} value - The serialized outerHTML string of the HTML element.
-     * @returns {HTMLElement} The deserialized HTML element.
-     * @throws {Error} Throws an error if deserialization is attempted outside the browser environment.
-     */
-    htmlelement: (value) => {
-      if (typeof document === 'undefined')
-        throw new Error('HTMLElement deserialization is only supported in browsers');
-      const div = document.createElement('div');
-      div.innerHTML = value;
-      return div;
-    },
-
-    /**
-     * @param {*} value - The ISO string representation of the date.
-     * @returns {Date} The deserialized Date object.
-     */
-    date: (value) => new Date(value),
-
-    /**
-     * @param {*} value - The string representation of the BigInt.
-     * @returns {BigInt} The deserialized BigInt object.
-     */
-    bigint: (value) => BigInt(value),
-
-    /**
-     * @param {*} value - The string or numeric representation of the number.
-     * @returns {number} The deserialized number.
-     */
-    number: (value) => Number(value),
-
-    /**
-     * @param {*} value - The string representation of the boolean value.
-     * @returns {boolean} The deserialized boolean value.
-     */
-    boolean: (value) => Boolean(value),
-
-    /**
-     * @returns {null} The deserialized null value.
-     */
+    /** @returns {null} The deserialized null value. */
     null: () => null,
-
-    /**
-     * @returns {undefined} The deserialized undefined value.
-     */
+    /**  @returns {undefined} The deserialized undefined value. */
     undefined: () => undefined,
-
-    /**
-     * @param {*} value - The serialized array of key-value pairs for Map deserialization.
-     * @returns {Map<any, any>} The deserialized Map object.
-     */
-    map: (value) => new Map(value),
-
-    /**
-     * @param {*} value - The serialized array of values for Set deserialization.
-     * @returns {Set<*>} The deserialized Set object.
-     */
-    set: (value) => new Set(value),
-
-    /**
-     * @param {*} value - The string description of the symbol.
-     * @returns {Symbol} The deserialized Symbol.
-     */
-    symbol: (value) => Symbol(value),
-
-    /**
-     * @param {*} value - The serialized representation of the array.
-     * @returns {Array<*>} The deserialized array.
-     */
-    array: (value) => value,
-
-    /**
-     * @param {*} value - The serialized representation of the plain JSON object.
-     * @returns {Record<string|number, any>} The deserialized object.
-     */
-    object: (value) => value,
-
-    /**
-     * @param {*} value - The serialized string.
-     * @returns {string} The deserialized string.
-     */
-    string: (value) => String(value),
-
-    /**
-     * @param {*} value - The base64-encoded string representation of the buffer.
-     * @returns {Buffer} The deserialized Buffer object.
-     */
-    buffer: (value) => Buffer.from(value, 'base64'),
   };
 
   /**
