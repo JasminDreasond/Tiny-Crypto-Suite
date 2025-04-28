@@ -164,7 +164,7 @@ addValueType(typeName, getFunction, convertFunction)
   - A function that converts a serialized value back into a value representation. 🔄
   - This should be used to transform the data into a readable or usable format when needed.
 
-- **`convertFunction`** `(function(data: any) => string)`:
+- **`convertFunction`** `(function(data: any) => SerializedData)`:
   - A function responsible for serializing the value into a specific structured format. 🔧
   - The serialized value will usually be returned as an object, ensuring you can store it in a consistent way for future conversion.
   - For example, you might want to serialize a regular expression like this:
