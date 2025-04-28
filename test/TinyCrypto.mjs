@@ -41,6 +41,7 @@ const testValues = [
       age: 23,
       inventory: ['pudding', 'ponies'],
       keys: {
+        settings: new Set([{ mio: true }, 2, 3]),
         isPudding: true,
         secret: [1, 2],
         secret2: { 1: true, 2: false, mio: { yay: true } },
@@ -49,7 +50,9 @@ const testValues = [
           ['pony', 'mio'],
         ]),
       },
-      map: new Map([['pony', 'mio']]),
+      map: new Map([
+        ['pudding', { chocolate: true, tiny: true, big: false, settings: new Set([1, 2, 3]) }],
+      ]),
     },
   },
 

@@ -305,13 +305,32 @@ class TinyCryptoParser {
     if (type === 'object') {
       /** @type {Record<string|number, any>} */
       const result = {};
-      for (const key in data)
-        result[key] = this.serializeDeep(data[key]);
+      for (const key in data) result[key] = this.serializeDeep(data[key]);
       return this.serialize(result);
     }
 
     if (type === 'array') {
       const result = data.map(/** @param {*} item */ (item) => this.serializeDeep(item));
+      return this.serialize(result);
+    }
+
+    if (type === 'map') {
+      const result = new Map();
+      data.forEach(
+        /** @param {*} value @param {*} key */ (value, key) => {
+          result.set(key, this.serializeDeep(value));
+        },
+      );
+      return this.serialize(result);
+    }
+
+    if (type === 'set') {
+      const result = new Set();
+      data.forEach(
+        /** @param {*} value */ (value) => {
+          result.add(this.serializeDeep(value));
+        },
+      );
       return this.serialize(result);
     }
 
@@ -336,8 +355,7 @@ class TinyCryptoParser {
     if (type === 'object') {
       /** @type {Record<string|number, any>} */
       const result = {};
-      for (const key in value)
-        result[key] = this.deserializeDeep(value[key]).value;
+      for (const key in value) result[key] = this.deserializeDeep(value[key]).value;
       tinyResult.value = result;
     }
 
@@ -346,6 +364,28 @@ class TinyCryptoParser {
       tinyResult.value = value.map(
         /** @param {*} item */ (item) => this.deserializeDeep(item).value,
       );
+    // Map
+    else if (type === 'map') {
+      const result = new Map();
+      value.forEach(
+        /** @param {*} value @param {*} key */ (value, key) => {
+          result.set(key, this.deserializeDeep(value).value);
+        },
+      );
+      tinyResult.value = result;
+    }
+
+    // Set
+    else if (type === 'set') {
+      const result = new Set();
+      value.forEach(
+        /** @param {*} item */ (item) => {
+          result.add(this.deserializeDeep(item).value);
+        },
+      );
+      tinyResult.value = result;
+    }
+
     // Normal
     else tinyResult.value = value;
 

@@ -47,11 +47,6 @@ const testWithInstance = async (cryptoInstance, title = 'Instance') => {
     isBrony: false,
     favoritePony: 'Pinkie Pie',
     inventory: ['candy', 'cookie', 'tiny pudding'],
-    keys: { isPudding: true, secret: [1, 2], secret2: { 1: true, 2: false } },
-    map: new Map([
-      ['pudding', 'chocolate'],
-      ['pony', 'mio'],
-    ]),
   };
 
   const encrypted = await cryptoInstance.encryptJson(testData);
