@@ -167,10 +167,6 @@ addValueType(typeName, getFunction, convertFunction, serializeDeep, deserializeD
 - **`convertFunction`** `(function(data: any) => SerializedData)`:
   - A function responsible for serializing the value into a specific structured format. 🔧
   - The serialized value will usually be returned as an object, ensuring you can store it in a consistent way for future conversion.
-  - For example, you might want to serialize a regular expression like this:
-    ```javascript
-    (data) => ({ __type: 'regexp', value: data.toString() })
-    ```
 
 - **`serializeDeep`** `(function(data: any) => any)` _(optional)_:
   - A function that deeply serializes a value type into a JSON-compatible format. 🌐🔐
