@@ -42,6 +42,51 @@ class TinyOlm {
   }
 
   /**
+   * Retrieves all active sessions.
+   *
+   * @returns {Map<string, Olm.Session>} A map of all active sessions where the key is the username.
+   */
+  getAllSessions() {
+    return this.sessions;
+  }
+
+  /**
+   * Retrieves the session for a specific username.
+   *
+   * @param {string} username - The username whose session is to be retrieved.
+   * @returns {Olm.Session|null} The session for the specified username, or null if no session exists.
+   * @throws {Error} Throws an error if no session exists for the specified username.
+   */
+  getSession(username) {
+    const session = this.sessions.get(username);
+    if (!session)
+      throw new Error(`No session found with ${username}`);
+    return session;
+  }
+
+  /**
+   * Removes the session for a specific username.
+   *
+   * @param {string} username - The username whose session is to be removed.
+   * @returns {boolean} Returns true if the session was removed, otherwise false.
+   * @throws {Error} Throws an error if no session exists for the specified username.
+   */
+  removeSession(username) {
+    if (!this.sessions.has(username))
+      throw new Error(`No session found with ${username}`);
+    return this.sessions.delete(username);
+  }
+
+  /**
+   * Clears all active sessions.
+   *
+   * @returns {void}
+   */
+  clearSessions() {
+    this.sessions.clear();
+  }
+
+  /**
    * Initializes the Olm library and creates a new account.
    *
    * @returns {Promise<void>}
