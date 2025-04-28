@@ -28,6 +28,7 @@ class TinyCryptoParser {
         const match = value.match(/^\/(.*)\/([gimsuy]*)$/);
         return match ? new RegExp(match[1], match[2]) : new RegExp(value);
       },
+      // Convert
       (data) => ({ __type: 'regexp', value: data.toString() }),
     );
 
@@ -46,6 +47,7 @@ class TinyCryptoParser {
         div.innerHTML = value;
         return div;
       },
+      // Convert
       (data) => ({ __type: 'htmlelement', value: data.outerHTML }),
     );
 
@@ -57,6 +59,7 @@ class TinyCryptoParser {
        * @returns {Date} The deserialized Date object.
        */
       (value) => new Date(value),
+      // Convert
       (data) => ({ __type: 'date', value: data.toISOString() }),
     );
 
@@ -68,6 +71,7 @@ class TinyCryptoParser {
        * @returns {BigInt} The deserialized BigInt object.
        */
       (value) => BigInt(value),
+      // Convert
       (data) => ({ __type: 'bigint', value: data.toString() }),
     );
 
@@ -79,6 +83,7 @@ class TinyCryptoParser {
        * @returns {number} The deserialized number.
        */
       (value) => Number(value),
+      // Convert
       (data) => ({ __type: 'number', value: data }),
     );
 
@@ -90,6 +95,7 @@ class TinyCryptoParser {
        * @returns {boolean} The deserialized boolean value.
        */
       (value) => Boolean(value),
+      // Convert
       (data) => ({ __type: 'boolean', value: data }),
     );
 
@@ -101,6 +107,7 @@ class TinyCryptoParser {
        * @returns {string} The deserialized string.
        */
       (value) => String(value),
+      // Convert
       (data) => ({ __type: 'string', value: data }),
     );
 
@@ -112,10 +119,31 @@ class TinyCryptoParser {
        * @returns {Map<any, any>} The deserialized Map object.
        */
       (value) => new Map(value),
+      // Convert
       (data) => ({
         __type: 'map',
         value: Array.from(data.entries()),
       }),
+      // Serialization
+      (data) => {
+        const result = new Map();
+        data.forEach(
+          /** @param {*} value @param {*} key */ (value, key) => {
+            result.set(key, this.serializeDeep(value));
+          },
+        );
+        return result;
+      },
+      // Deserialization
+      (value) => {
+        const result = new Map();
+        value.forEach(
+          /** @param {*} value @param {*} key */ (value, key) => {
+            result.set(key, this.deserializeDeep(value).value);
+          },
+        );
+        return result;
+      },
     );
 
     // Set
@@ -126,10 +154,31 @@ class TinyCryptoParser {
        * @returns {Set<*>} The deserialized Set object.
        */
       (value) => new Set(value),
+      // Convert
       (data) => ({
         __type: 'set',
         value: Array.from(data.values()),
       }),
+      // Serialization
+      (data) => {
+        const result = new Set();
+        data.forEach(
+          /** @param {*} value */ (value) => {
+            result.add(this.serializeDeep(value));
+          },
+        );
+        return result;
+      },
+      // Deserialization
+      (value) => {
+        const result = new Set();
+        value.forEach(
+          /** @param {*} item */ (item) => {
+            result.add(this.deserializeDeep(item).value);
+          },
+        );
+        return result;
+      },
     );
 
     // Symbol
@@ -140,6 +189,7 @@ class TinyCryptoParser {
        * @returns {Symbol} The deserialized Symbol.
        */
       (value) => Symbol(value),
+      // Convert
       (data) => ({ __type: 'symbol', value: data.description }),
     );
 
@@ -151,7 +201,12 @@ class TinyCryptoParser {
        * @returns {Array<*>} The deserialized array.
        */
       (value) => value,
+      // Convert
       (data) => ({ __type: 'array', value: data }),
+      // Serialization
+      (data) => data.map(/** @param {*} item */ (item) => this.serializeDeep(item)),
+      // Deserialization
+      (value) => value.map(/** @param {*} item */ (item) => this.deserializeDeep(item).value),
     );
 
     // Object
@@ -162,7 +217,22 @@ class TinyCryptoParser {
        * @returns {Record<string|number, any>} The deserialized object.
        */
       (value) => value,
+      // Convert
       (data) => ({ __type: 'object', value: data }),
+      // Serialization
+      (data) => {
+        /** @type {Record<string|number, any>} */
+        const result = {};
+        for (const key in data) result[key] = this.serializeDeep(data[key]);
+        return result;
+      },
+      // Deserialization
+      (value) => {
+        /** @type {Record<string|number, any>} */
+        const result = {};
+        for (const key in value) result[key] = this.deserializeDeep(value[key]).value;
+        return result;
+      },
     );
 
     // Buffer
@@ -173,6 +243,7 @@ class TinyCryptoParser {
        * @returns {Buffer} The deserialized Buffer object.
        */
       (value) => Buffer.from(value, 'base64'),
+      // Convert
       (data) => ({ __type: 'buffer', value: data.toString('base64') }),
     );
   }
@@ -232,6 +303,18 @@ class TinyCryptoParser {
   };
 
   /**
+   * A mapping of data deserialization to their functions.
+   * @type {Record<string, (data: any) => any>}
+   */
+  #deepDeserialize = {};
+
+  /**
+   * A mapping of data serialization to their functions.
+   * @type {Record<string, (data: any) => any>}
+   */
+  #deepSerialize = {};
+
+  /**
    * Validates that the actual type of a deserialized value matches the expected type.
    * This method ensures that the type of the deserialized data matches what is expected,
    * throwing an error if there's a mismatch.
@@ -250,14 +333,25 @@ class TinyCryptoParser {
    * @param {string} typeName
    * @param {(data: any) => any} getFunction
    * @param {(data: any) => SerializedData} convertFunction
+   * @param {(data: any) => any} [serializeDeep]
+   * @param {(data: any) => any} [deserializeDeep]
    */
-  addValueType(typeName, getFunction, convertFunction) {
+  addValueType(typeName, getFunction, convertFunction, serializeDeep, deserializeDeep) {
+    // Basic features
     if (this.#valueTypes[typeName] || this.#valueConvertTypes[typeName])
       throw new Error(`Type "${typeName}" already exists.`);
     if (typeof getFunction !== 'function' || typeof convertFunction !== 'function')
       throw new Error('Both getFunction and convertFunction must be functions.');
     this.#valueTypes[typeName] = getFunction;
     this.#valueConvertTypes[typeName] = convertFunction;
+
+    // Serialization
+    if (typeof serializeDeep === 'function' || typeof deserializeDeep === 'function') {
+      if (typeof serializeDeep !== 'function' || typeof deserializeDeep !== 'function')
+        throw new Error('Both serializeDeep and deserializeDeep must be functions.');
+      this.#deepDeserialize[typeName] = deserializeDeep;
+      this.#deepSerialize[typeName] = serializeDeep;
+    }
   }
 
   /**
@@ -316,39 +410,8 @@ class TinyCryptoParser {
    */
   serializeDeep(data) {
     const type = objType(data) || 'undefined';
-
-    if (type === 'object') {
-      /** @type {Record<string|number, any>} */
-      const result = {};
-      for (const key in data) result[key] = this.serializeDeep(data[key]);
-      return this.serialize(result);
-    }
-
-    if (type === 'array') {
-      const result = data.map(/** @param {*} item */ (item) => this.serializeDeep(item));
-      return this.serialize(result);
-    }
-
-    if (type === 'map') {
-      const result = new Map();
-      data.forEach(
-        /** @param {*} value @param {*} key */ (value, key) => {
-          result.set(key, this.serializeDeep(value));
-        },
-      );
-      return this.serialize(result);
-    }
-
-    if (type === 'set') {
-      const result = new Set();
-      data.forEach(
-        /** @param {*} value */ (value) => {
-          result.add(this.serializeDeep(value));
-        },
-      );
-      return this.serialize(result);
-    }
-
+    if (typeof type === 'string' && typeof this.#deepSerialize[type] === 'function')
+      return this.serialize(this.#deepSerialize[type](data));
     return this.serialize(data);
   }
 
@@ -363,49 +426,13 @@ class TinyCryptoParser {
    */
   deserializeDeep(text, expectedType = null) {
     const { value, type } = this.deserialize(text, expectedType);
-    /** @type {DeserializedData} */
-    const tinyResult = { value: null, type };
-
-    // Object
-    if (type === 'object') {
-      /** @type {Record<string|number, any>} */
-      const result = {};
-      for (const key in value) result[key] = this.deserializeDeep(value[key]).value;
-      tinyResult.value = result;
-    }
-
-    // Array
-    else if (type === 'array')
-      tinyResult.value = value.map(
-        /** @param {*} item */ (item) => this.deserializeDeep(item).value,
-      );
-    // Map
-    else if (type === 'map') {
-      const result = new Map();
-      value.forEach(
-        /** @param {*} value @param {*} key */ (value, key) => {
-          result.set(key, this.deserializeDeep(value).value);
-        },
-      );
-      tinyResult.value = result;
-    }
-
-    // Set
-    else if (type === 'set') {
-      const result = new Set();
-      value.forEach(
-        /** @param {*} item */ (item) => {
-          result.add(this.deserializeDeep(item).value);
-        },
-      );
-      tinyResult.value = result;
-    }
-
-    // Normal
-    else tinyResult.value = value;
-
-    // Complete
-    return tinyResult;
+    return {
+      value:
+        typeof this.#deepDeserialize[type] === 'function'
+          ? this.#deepDeserialize[type](value)
+          : value,
+      type,
+    };
   }
 }
 
