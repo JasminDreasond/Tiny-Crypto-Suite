@@ -93,7 +93,7 @@ const colors = {
   divider: '\x1b[90m────────────────────────────────────\x1b[0m',
 };
 
-(async () => {
+const tinyCryptoSimulation = async () => {
   console.log(`${colors.bold}${colors.cyan}🔒 CryptoManager Data Type Test\n${colors.reset}`);
 
   for (const test of testValues) {
@@ -117,4 +117,6 @@ const colors = {
 
     console.log(colors.divider);
   }
-})();
+};
+
+export default tinyCryptoSimulation;

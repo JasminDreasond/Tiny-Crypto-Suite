@@ -5,7 +5,7 @@
         "checkJs": true,
         "removeComments": false,
         "declaration": true,
-        "declarationMap": false,
+        "declarationMap": true,
         "declarationDir": "./dist",
         "emitDeclarationOnly": false,
         "target": "ESNext",

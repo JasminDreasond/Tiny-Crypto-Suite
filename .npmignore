@@ -9,6 +9,7 @@ babel.config.json
 rollup.config.mjs
 webpack.config.mjs
 tsconfig.json
+*.map
 
 # Logs
 logs

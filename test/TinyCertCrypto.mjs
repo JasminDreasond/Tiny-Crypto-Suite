@@ -108,6 +108,14 @@ const main = async () => {
   printSeparator('🎉 ALL TESTS COMPLETED SUCCESSFULLY', '\x1b[32m');
 };
 
-main().catch((err) => {
-  console.error('❌ Test failed:', err);
-});
+const executeSimulationCert = () =>
+  new Promise((resolve) => {
+    main()
+      .then(resolve)
+      .catch((err) => {
+        console.error('❌ Test failed:', err);
+        resolve();
+      });
+  });
+
+export default executeSimulationCert;
