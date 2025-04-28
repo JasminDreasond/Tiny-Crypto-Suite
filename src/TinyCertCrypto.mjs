@@ -143,6 +143,16 @@ class TinyCertCrypto {
   }
 
   /**
+   * Add a new value type and its converter function.
+   * @param {string} typeName
+   * @param {(data: any) => any} getFunction
+   * @param {(data: any) => { __type: string, value?: any }} convertFunction
+   */
+  addValueType(typeName, getFunction, convertFunction) {
+    return this.getCrypto().addValueType(typeName, getFunction, convertFunction);
+  }
+
+  /**
    * Sets the deep serialization and deserialization mode in the TinyCrypto instance.
    * If the argument is a boolean, updates the deep mode accordingly.
    * Throws an error if the value is not a boolean.

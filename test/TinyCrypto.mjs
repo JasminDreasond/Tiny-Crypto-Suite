@@ -24,19 +24,6 @@ const testValues = [
   { label: 'Array', value: [1, 2, 3] },
   { label: 'Object', value: { name: 'Yasmin', age: 23 } },
   {
-    label: 'Multi Object',
-    value: {
-      name: 'Yasmin',
-      age: 23,
-      inventory: ['pudding', 'ponies'],
-      keys: { isPudding: true, secret: [1, 2], secret2: { 1: true, 2: false } },
-      map: new Map([
-        ['pudding', 'chocolate'],
-        ['pony', 'mio'],
-      ]),
-    },
-  },
-  {
     label: 'Map',
     value: new Map([
       ['key1', 'value1'],
@@ -46,6 +33,25 @@ const testValues = [
   { label: 'Set', value: new Set([1, 2, 3]) },
   { label: 'Buffer', value: Buffer.from('Hello buffer!') },
   { label: 'RegExp', value: /hello\d+/gi },
+
+  {
+    label: 'Multi Object',
+    value: {
+      name: 'Yasmin',
+      age: 23,
+      inventory: ['pudding', 'ponies'],
+      keys: {
+        isPudding: true,
+        secret: [1, 2],
+        secret2: { 1: true, 2: false, mio: { yay: true } },
+        map: new Map([
+          ['pudding', 'chocolate'],
+          ['pony', 'mio'],
+        ]),
+      },
+      map: new Map([['pony', 'mio']]),
+    },
+  },
 
   // HTML apenas se estiver no navegador
   ...(typeof document !== 'undefined'
@@ -94,6 +100,7 @@ const colors = {
       const type = crypto.getTypeFromEncrypted(encrypted);
 
       console.log(`${colors.green}✅ ${colors.bold}${test.label}${colors.reset}`);
+      console.log(`${colors.blue}  Raw:${colors.reset}`, test.value);
       console.log(
         `${colors.yellow}  Encrypted:${colors.reset}\n${colors.gray}${JSON.stringify(encrypted, null, 2)}${colors.reset}`,
       );

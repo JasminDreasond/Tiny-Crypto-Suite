@@ -42,6 +42,16 @@ class TinyCrypto {
   }
 
   /**
+   * Add a new value type and its converter function.
+   * @param {string} typeName
+   * @param {(data: any) => any} getFunction
+   * @param {(data: any) => { __type: string, value?: any }} convertFunction
+   */
+  addValueType(typeName, getFunction, convertFunction) {
+    return this.#parser.addValueType(typeName, getFunction, convertFunction);
+  }
+
+  /**
    * Creates a new instance of the CryptoManager class with configurable options.
    *
    * @param {Object} [options={}] - Configuration options for encryption and decryption.
