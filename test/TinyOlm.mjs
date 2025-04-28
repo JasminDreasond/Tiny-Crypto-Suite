@@ -4,7 +4,6 @@ import { TinyOlm } from '../dist/index.mjs';
 // Color codes for styling
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
-
 const CYAN = '\x1b[36m';
 const MAGENTA = '\x1b[35m';
 const YELLOW = '\x1b[33m';
@@ -15,10 +14,25 @@ const GRAY = '\x1b[90m';
 const aliceTag = `${MAGENTA}[Alice]${RESET}`;
 const bobTag = `${CYAN}[Bob]${RESET}`;
 
+/**
+ * Creates a formatted header.
+ * @param {string} text - The header text.
+ * @returns {string}
+ */
 const header = (text) => `\n${BOLD}${BLUE}=== ${text} ===${RESET}\n`;
+
+/**
+ * Creates a divider line.
+ * @returns {string}
+ */
 const divider = () => `${GRAY}────────────────────────────────────────${RESET}`;
 
-// Function to create a beautiful box around messages
+/**
+ * Creates a formatted message box.
+ * @param {string} title - The title of the box.
+ * @param {string} content - The content inside the box.
+ * @returns {string}
+ */
 const boxMessage = (title, content) => {
   const titleLine = `╭── ${title} ─────────────────────────`;
   const endLine = `╰──────────────────────────────────────`;
@@ -31,8 +45,8 @@ async function simulateMatrixCommunication() {
 
   const server = new FakeMatrixServer();
 
-  const alice = new TinyOlm('alice');
-  const bob = new TinyOlm('bob');
+  const alice = new TinyOlm('alice', 'tiny-computer');
+  const bob = new TinyOlm('bob', 'tiny-computer');
 
   console.log(header('Initializing Accounts 🚀'));
 
@@ -56,6 +70,10 @@ async function simulateMatrixCommunication() {
 
   const bobIdentityKey = server.fetchIdentityKey('bob');
   const bobOneTimeKey = server.fetchOneTimeKey('bob');
+
+  if (!bobIdentityKey || !bobOneTimeKey)
+    throw new Error('Bob has no available keys for session establishment.');
+
   alice.createOutboundSession(bobIdentityKey, bobOneTimeKey, 'bob');
 
   console.log(divider());
@@ -183,6 +201,7 @@ async function simulateMatrixCommunication() {
   console.log(boxMessage(`${bobTag} ${GREEN}Decrypted message (3)${RESET}`, decryptedMessage3));
 
   console.log(header('Conversation Ended ✅'));
+  console.log(header('Simulation Complete 🎉'));
 }
 
 // Run simulation

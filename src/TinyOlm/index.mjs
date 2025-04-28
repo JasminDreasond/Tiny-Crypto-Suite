@@ -59,8 +59,7 @@ class TinyOlm {
    */
   getSession(username) {
     const session = this.sessions.get(username);
-    if (!session)
-      throw new Error(`No session found with ${username}`);
+    if (!session) throw new Error(`No session found with ${username}`);
     return session;
   }
 
@@ -72,8 +71,7 @@ class TinyOlm {
    * @throws {Error} Throws an error if no session exists for the specified username.
    */
   removeSession(username) {
-    if (!this.sessions.has(username))
-      throw new Error(`No session found with ${username}`);
+    if (!this.sessions.has(username)) throw new Error(`No session found with ${username}`);
     return this.sessions.delete(username);
   }
 
