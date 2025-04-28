@@ -159,11 +159,11 @@ addValueType(typeName, getFunction, convertFunction)
 - **`typeName`** `(string)`:
   - The name of the new type you wish to add. 🏷️
   - This name must be unique within the list of existing types. ❗
-  
+
 - **`getFunction`** `(function(data: any) => any)`:
   - A function that converts a serialized value back into a value representation. 🔄
   - This should be used to transform the data into a readable or usable format when needed.
-  
+
 - **`convertFunction`** `(function(data: any) => string)`:
   - A function responsible for serializing the value into a specific structured format. 🔧
   - The serialized value will usually be returned as an object, ensuring you can store it in a consistent way for future conversion.
@@ -171,6 +171,16 @@ addValueType(typeName, getFunction, convertFunction)
     ```javascript
     (data) => ({ __type: 'regexp', value: data.toString() })
     ```
+
+- **`serializeDeep`** `(function(data: any) => any)` _(optional)_:
+  - A function that deeply serializes a value type into a JSON-compatible format. 🌐🔐
+  - This function is invoked when the data is serialized deeply, meaning if the type is complex (e.g., objects, arrays, or custom types), it will recursively traverse the structure and serialize each element.
+  - For example, you might use this function to serialize a `Map` or `Set`, ensuring that each key-value pair or set element is serialized deeply.
+
+- **`deserializeDeep`** `(function(data: any) => any)` _(optional)_:
+  - A function that deeply deserializes a serialized value back to its original format. 🔄💡
+  - This function is used to handle cases where you need to recursively parse complex data types (such as objects, arrays, `Map`, or `Set`) back into their original form.
+  - For example, you might use this function to deserialize a `Map` or `Set`, converting it back into a structure that holds the appropriate data types.
 
 ### 🔙 Return
 
@@ -188,18 +198,35 @@ addValueType(typeName, getFunction, convertFunction)
 ```javascript
 myInstance.addValueType(
   'regexp',
-  (data) => new RegExp(JSON.parse(data).value)                            // getFunction: serializes the regexp ✅
-  (data) => JSON.stringify({ __type: 'regexp', value: data.toString() }), // convertFunction: converts it back to a RegExp 🔄
+  /**
+   * @param {*} value - The serialized regular expression string.
+   * @returns {RegExp} The deserialized RegExp object.
+   */
+  (value) => {
+    const match = value.match(/^\/(.*)\/([gimsuy]*)$/);
+    return match ? new RegExp(match[1], match[2]) : new RegExp(value);
+  },
+  // Convert
+  (data) => ({ __type: 'regexp', value: data.toString() }),
 );
 ```
 
-### 📅 Example 2: Adding a Type for Dates
+### 🌐 Example 2: Adding a Type for Array with serialization
 
 ```javascript
 myInstance.addValueType(
-  'date',
-  (data) => new Date(JSON.parse(data).value),                              // getFunction: serializes the Date object ✅
-  (data) => JSON.stringify({ __type: 'date', value: data.toISOString() })  // convertFunction: converts it back to a Date 🔄
+  'array',
+  /**
+   * @param {*} value - The serialized representation of the array.
+   * @returns {Array<*>} The deserialized array.
+   */
+  (value) => value,
+  // Convert
+  (data) => ({ __type: 'array', value: data }),
+  // Serialization
+  (data) => data.map(/** @param {*} item */ (item) => myInstance.serializeDeep(item)),
+  // Deserialization
+  (value) => value.map(/** @param {*} item */ (item) => myInstance.deserializeDeep(item).value),
 );
 ```
 
