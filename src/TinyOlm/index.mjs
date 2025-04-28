@@ -55,7 +55,7 @@ class TinyOlm {
   generateOneTimeKeys(number = 10) {
     if (!this.account) throw new Error('Account is not initialized.');
     this.account.generate_one_time_keys(number);
-    this.#_signOneTimeKeys();
+    this.#signOneTimeKeys();
   }
 
   /**
@@ -64,7 +64,7 @@ class TinyOlm {
    * @returns {void}
    * @throws {Error} Throws an error if account is not initialized.
    */
-  #_signOneTimeKeys() {
+  #signOneTimeKeys() {
     if (!this.account) throw new Error('Account is not initialized.');
     const oneTimeKeys = this.getOneTimeKeys();
     const Olm = tinyOlm.getOlm();
