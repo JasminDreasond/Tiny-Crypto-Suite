@@ -151,7 +151,7 @@ The `addValueType` function allows you to add new types and their corresponding 
 ## Method Signature
 
 ```javascript
-addValueType(typeName, getFunction, convertFunction)
+addValueType(typeName, getFunction, convertFunction, serializeDeep, deserializeDeep)
 ```
 
 ### 📜 Parameters
@@ -184,11 +184,12 @@ addValueType(typeName, getFunction, convertFunction)
 
 ### 🔙 Return
 
-- This function does not return anything explicitly. It adds the `typeName`, `getFunction`, and `convertFunction` to their respective collections (`#valueTypes` and `#valueConvertTypes`). 📚
+- This function does not return anything explicitly. It adds the `typeName`, `getFunction`, `convertFunction`, `serializeDeep`, and `deserializeDeep` to their respective collections (`#valueTypes`, `#valueConvertTypes`, `#deepSerialize`, and `#deepDeserialize`). 📚
 
 ### ⚠️ Throws
 
 - **`Error`**: If either `getFunction` or `convertFunction` is not a function, an error will be thrown. 🛑
+- **`Error`**: If either `serializeDeep` or `deserializeDeep` is defined but not a function, an error will be thrown. 🛑
 - **`Error`**: If the provided `typeName` already exists in the list, an error will be thrown. ⚠️
 
 ## 🧑‍💻 Usage
