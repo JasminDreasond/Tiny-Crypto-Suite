@@ -1,3 +1,4 @@
+import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 import tinyOlm from './Module.mjs';
 
 /**
@@ -25,6 +26,42 @@ class TinyOlm {
 
     /** @type {Map<string, Olm.Session>} */
     this.sessions = new Map();
+  }
+
+  /**
+   * Important instance used to validate values.
+   * @type {TinyCryptoParser}
+   */
+  #parser = new TinyCryptoParser();
+
+  /**
+   * Add a new value type and its converter function.
+   * @param {string} typeName
+   * @param {(data: any) => any} getFunction
+   * @param {(data: any) => { __type: string, value?: any }} convertFunction
+   */
+  addValueType(typeName, getFunction, convertFunction) {
+    return this.#parser.addValueType(typeName, getFunction, convertFunction);
+  }
+
+  /**
+   * Indicates whether the serialization or deserialization should be performed deeply.
+   * @type {boolean}
+   */
+  isDeep = true;
+
+  /**
+   * Sets the deep serialization and deserialization mode.
+   * If the argument is a boolean, updates the deep mode accordingly.
+   * Throws an error if the value is not a boolean.
+   *
+   * @param {boolean} value - A boolean indicating whether deep mode should be enabled.
+   * @throws {Error} Throws if the provided value is not a boolean.
+   */
+  setDeepMode(value) {
+    if (typeof value !== 'boolean')
+      throw new Error('The value provided to setDeepMode must be a boolean.');
+    this.isDeep = value;
   }
 
   /**
@@ -359,6 +396,37 @@ class TinyOlm {
     // After decrypting, consider the session updated (ratcheted)
     session.has_received_message();
     return plaintext;
+  }
+
+  /**
+   * Encrypts a data to a specified user.
+   *
+   * @param {string} toUsername - The username of the recipient.
+   * @param {*} data - The content to encrypt.
+   * @returns {EncryptedMessage} The encrypted message.
+   * @throws {Error} Throws an error if no session exists with the given username.
+   */
+  encrypt(toUsername, data) {
+    const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
+    return this.encryptMessage(toUsername, plainText);
+  }
+
+  /**
+   * Decrypts a received data from a specified user.
+   *
+   * @param {string} fromUsername - The username of the sender.
+   * @param {number} messageType - The type of the message (0: pre-key, 1: message).
+   * @param {string} plaintext - The decrypted content to decrypt.
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {*} The decrypted plaintext message.
+   * @throws {Error} Throws an error if no session exists with the given username.
+   */
+  decrypt(fromUsername, messageType, plaintext, expectedType = null) {
+    const decrypted = this.decryptMessage(fromUsername, messageType, plaintext);
+    const { value } = this.isDeep
+      ? this.#parser.deserializeDeep(decrypted, expectedType)
+      : this.#parser.deserialize(decrypted, expectedType);
+    return value;
   }
 }
 

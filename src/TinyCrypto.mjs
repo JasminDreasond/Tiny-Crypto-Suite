@@ -37,7 +37,6 @@ class TinyCrypto {
   setDeepMode(value) {
     if (typeof value !== 'boolean')
       throw new Error('The value provided to setDeepMode must be a boolean.');
-
     this.isDeep = value;
   }
 
@@ -52,7 +51,7 @@ class TinyCrypto {
   }
 
   /**
-   * Creates a new instance of the CryptoManager class with configurable options.
+   * Creates a new instance of the TinyCrypto class with configurable options.
    *
    * @param {Object} [options={}] - Configuration options for encryption and decryption.
    * @param {string} [options.algorithm='aes-256-gcm'] - The encryption algorithm to use. Recommended: 'aes-256-gcm' for authenticated encryption.
@@ -134,6 +133,13 @@ class TinyCrypto {
   }
 
   /**
+   * @typedef {Object} EncryptedDataParams
+   * @property {string} iv - The Initialization Vector (IV) used in encryption, encoded with the output encoding.
+   * @property {string} encrypted - The encrypted data to decrypt, encoded with the output encoding.
+   * @property {string} authTag - The authentication tag used to verify the integrity of the encrypted data.
+   */
+
+  /**
    * Encrypts a given value (string, number, object, etc.)
    *
    * The value is first serialized de forma segura (preservando o tipo) antes da criptografia.
@@ -168,13 +174,6 @@ class TinyCrypto {
       authTag: authTag.toString(this.outputEncoding),
     };
   }
-
-  /**
-   * @typedef {Object} EncryptedDataParams
-   * @property {string} iv - The Initialization Vector (IV) used in encryption, encoded with the output encoding.
-   * @property {string} encrypted - The encrypted data to decrypt, encoded with the output encoding.
-   * @property {string} authTag - The authentication tag used to verify the integrity of the encrypted data.
-   */
 
   /**
    * Decrypts a previously encrypted value.
