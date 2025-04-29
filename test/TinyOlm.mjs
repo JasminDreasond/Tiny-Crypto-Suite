@@ -202,6 +202,27 @@ async function simulateSingleMatrixCommunication() {
 
   console.log(boxMessage(`${bobTag} ${GREEN}Decrypted message (3)${RESET}`, decryptedMessage3));
 
+  // Step 11: Final quick message from Alice
+  const plainContent = { withPudding: true, time: new Date(), description: 'Yay!' };
+  const encryptedForBob4 = alice.encrypt('bob', plainContent);
+
+  console.log(
+    boxMessage(
+      `${aliceTag} ${YELLOW}Encrypted for Bob (4)${RESET}`,
+      JSON.stringify(encryptedForBob4, null, 2),
+    ),
+  );
+
+  console.log(divider());
+
+  const decryptedMessage4 = bob.decrypt(
+    'alice',
+    encryptedForBob4.type,
+    encryptedForBob4.body,
+  );
+
+  console.log(boxMessage(`${bobTag} ${GREEN}Decrypted message (4)${RESET}`, JSON.stringify(decryptedMessage4, null, 2)));
+
   console.log(header('Conversation Ended ✅'));
 }
 
@@ -349,6 +370,29 @@ async function simulateGroupMatrixCommunication() {
   ]) {
     const decrypted = user.decryptGroupMessage('room-1', 'diana', encryptedFromDiana);
     console.log(boxMessage(`${tag} ${GREEN}Decrypted message${RESET}`, decrypted.plaintext));
+  }
+
+  // Diana sends a final data
+  const dianaGroupData = { withPudding: true, time: new Date(), description: 'Yay!' };
+  const encryptedDataFromDiana = diana.encryptGroupContent('room-1', dianaGroupData);
+
+  console.log(
+    boxMessage(
+      `${dianaTag} ${YELLOW}Encrypted group content${RESET}`,
+      JSON.stringify(encryptedDataFromDiana, null, 2),
+    ),
+  );
+
+  console.log(divider());
+
+  // Alice, Bob, and Charlie decrypt Diana's content
+  for (const [user, tag] of [
+    [alice, aliceTag],
+    [bob, bobTag],
+    [charlie, charlieTag],
+  ]) {
+    const decrypted = user.decryptGroupContent('room-1', 'diana', encryptedDataFromDiana);
+    console.log(boxMessage(`${tag} ${GREEN}Decrypted content${RESET}`, JSON.stringify(decrypted.content, null, 2)));
   }
 
   console.log(header('Group Conversation Ended ✅'));
