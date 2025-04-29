@@ -4,10 +4,12 @@ import tinyOlm from './Module.mjs';
 /**
  * TinyOlm is a lightweight wrapper for handling encryption sessions using the Olm cryptographic library.
  *
+ * This class is **not available for production mode**.
+ *
  * @beta
  * @class
  */
-class TinyOlm {
+class TinyOlmInstance {
   /**
    * Creates a new TinyOlm instance for a specific username.
    *
@@ -26,6 +28,12 @@ class TinyOlm {
 
     /** @type {Map<string, Olm.Session>} */
     this.sessions = new Map();
+
+    /** @type {Map<string, Olm.OutboundGroupSession>} */
+    this.groupSessions = new Map();
+
+    /** @type {Map<string, Olm.InboundGroupSession>} */
+    this.groupInboundSessions = new Map();
   }
 
   /**
@@ -91,7 +99,7 @@ class TinyOlm {
    * Retrieves the session for a specific username.
    *
    * @param {string} username - The username whose session is to be retrieved.
-   * @returns {Olm.Session|null} The session for the specified username, or null if no session exists.
+   * @returns {Olm.Session} The session for the specified username, or null if no session exists.
    * @throws {Error} Throws an error if no session exists for the specified username.
    */
   getSession(username) {
@@ -108,7 +116,8 @@ class TinyOlm {
    * @throws {Error} Throws an error if no session exists for the specified username.
    */
   removeSession(username) {
-    if (!this.sessions.has(username)) throw new Error(`No session found with ${username}`);
+    const session = this.getSession(username);
+    session.free();
     return this.sessions.delete(username);
   }
 
@@ -130,6 +139,213 @@ class TinyOlm {
     const Olm = await tinyOlm.fetchOlm();
     this.account = new Olm.Account();
     this.account.create();
+  }
+
+  /**
+   * Gets the unique session ID for a group session per user.
+   * @param {string} roomId
+   * @param {string} [username]
+   * @returns {string}
+   */
+  #getGroupSessionId(roomId, username) {
+    return `${username}${typeof roomId === 'string' ? `:${roomId}` : ''}`;
+  }
+
+  /**
+   * Creates a new outbound group session for a specific room.
+   * @param {string} roomId
+   * @returns {Olm.OutboundGroupSession}
+   */
+  createGroupSession(roomId) {
+    const Olm = tinyOlm.getOlm();
+    const outboundSession = new Olm.OutboundGroupSession();
+    outboundSession.create();
+    this.groupSessions.set(roomId, outboundSession);
+    return outboundSession;
+  }
+
+  /**
+   * Exports the current outbound group session key for a room.
+   * @param {string} roomId
+   * @returns {string}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  exportGroupSession(roomId) {
+    const outboundSession = this.groupSessions.get(roomId);
+    if (!outboundSession) throw new Error(`No outbound group session found for room: ${roomId}`);
+    return outboundSession.session_key();
+  }
+
+  /**
+   * Imports an inbound group session using a provided session key.
+   * @param {string} roomId
+   * @param {string} username
+   * @param {string} sessionKey
+   * @returns {void}
+   */
+  importGroupSession(roomId, username, sessionKey) {
+    const Olm = tinyOlm.getOlm();
+    const inboundSession = new Olm.InboundGroupSession();
+    inboundSession.create(sessionKey);
+    this.groupInboundSessions.set(this.#getGroupSessionId(roomId, username), inboundSession);
+  }
+
+  /**
+   * Returns all outbound group sessions.
+   * @returns {Map<string, Olm.OutboundGroupSession>}
+   */
+  getAllGroupSessions() {
+    return this.groupSessions;
+  }
+
+  /**
+   * Returns a specific outbound group session by room ID.
+   * @param {string} roomId
+   * @returns {Olm.OutboundGroupSession}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  getGroupSession(roomId) {
+    const session = this.groupSessions.get(roomId);
+    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
+    return session;
+  }
+
+  /**
+   * Removes a specific outbound group session by room ID.
+   * @param {string} roomId
+   * @returns {boolean} True if a session was removed, false otherwise.
+   */
+  removeGroupSession(roomId) {
+    const session = this.getGroupSession(roomId);
+    session.free();
+    return this.groupSessions.delete(roomId);
+  }
+
+  /**
+   * Returns all inbound group sessions.
+   * @returns {Map<string, Olm.InboundGroupSession>}
+   */
+  getAllInboundGroupSessions() {
+    return this.groupInboundSessions;
+  }
+
+  /**
+   * Returns a specific inbound group session by room ID and username.
+   * @param {string} roomId
+   * @param {string} [username]
+   * @returns {Olm.InboundGroupSession}
+   * @throws {Error} If no inbound session exists for the given room and username.
+   */
+  getInboundGroupSession(roomId, username) {
+    const sessionId = this.#getGroupSessionId(roomId, username);
+    const session = this.groupInboundSessions.get(sessionId);
+    if (!session)
+      throw new Error(`No inbound group session found for room: ${roomId}, username: ${username}`);
+    return session;
+  }
+
+  /**
+   * Removes a specific inbound group session by room ID and username.
+   * @param {string} roomId
+   * @param {string} username
+   * @returns {boolean} True if a session was removed, false otherwise.
+   */
+  removeInboundGroupSession(roomId, username) {
+    const sessionId = this.#getGroupSessionId(roomId, username);
+    const session = this.getInboundGroupSession(sessionId);
+    session.free();
+    return this.groupInboundSessions.delete(sessionId);
+  }
+
+  /**
+   * Encrypts a plaintext message for a specific room using the outbound group session.
+   * @param {string} roomId
+   * @param {string} plaintext
+   * @returns {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  encryptGroupMessage(roomId, plaintext) {
+    const session = this.groupSessions.get(roomId);
+    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
+
+    const ciphertext = session.encrypt(plaintext);
+    return {
+      body: ciphertext,
+      session_id: session.session_id(),
+      message_index: session.message_index(),
+    };
+  }
+
+  /**
+   * Decrypts an encrypted group message using the inbound group session.
+   * @param {string} roomId
+   * @param {string} username
+   * @param {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }} encryptedMessage
+   * @returns {{ message_index: number; plaintext: string; }}
+   * @throws {Error} If no inbound session exists for the given room and username.
+   */
+  decryptGroupMessage(roomId, username, encryptedMessage) {
+    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, username));
+    if (!session)
+      throw new Error(`No inbound group session found for room: ${roomId} and user: ${username}`);
+    return session.decrypt(encryptedMessage.body);
+  }
+
+  /**
+   * Encrypts a content for a specific room using the outbound group session.
+   * @param {string} roomId
+   * @param {*} data
+   * @returns {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  encryptGroupContent(roomId, data) {
+    const session = this.groupSessions.get(roomId);
+    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
+
+    const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
+    const ciphertext = session.encrypt(plainText);
+    return {
+      body: ciphertext,
+      session_id: session.session_id(),
+      message_index: session.message_index(),
+    };
+  }
+
+  /**
+   * Decrypts an encrypted content using the inbound group session.
+   * @param {string} roomId
+   * @param {string} username
+   * @param {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }} encryptedMessage
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {{ message_index: number; content: string; }}
+   * @throws {Error} If no inbound session exists for the given room and username.
+   */
+  decryptGroupContent(roomId, username, encryptedMessage, expectedType) {
+    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, username));
+    if (!session)
+      throw new Error(`No inbound group session found for room: ${roomId} and user: ${username}`);
+    const result = session.decrypt(encryptedMessage.body);
+
+    const { value } = this.isDeep
+      ? this.#parser.deserializeDeep(result.plaintext, expectedType)
+      : this.#parser.deserialize(result.plaintext, expectedType);
+    return { message_index: result.message_index, content: value };
   }
 
   /**
@@ -309,14 +525,16 @@ class TinyOlm {
    * @returns {void}
    */
   dispose() {
-    for (const session of this.sessions.values()) {
-      session.free();
-    }
+    for (const session of this.sessions.values()) session.free();
     this.sessions.clear();
     if (this.account) {
       this.account.free();
       this.account = null;
     }
+    for (const inbound of this.groupInboundSessions.values()) inbound.free();
+    for (const groupSession of this.groupSessions.values()) groupSession.free();
+    this.groupInboundSessions.clear();
+    this.groupSessions.clear();
   }
 
   /**
@@ -430,4 +648,4 @@ class TinyOlm {
   }
 }
 
-export default TinyOlm;
+export default TinyOlmInstance;

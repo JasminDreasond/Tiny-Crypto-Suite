@@ -1,5 +1,5 @@
 import FakeMatrixServer from '../dist/TinyOlm/FakeMatrixServer.mjs';
-import { TinyOlm } from '../dist/index.mjs';
+import { TinyOlmInstance } from '../dist/index.mjs';
 
 // Color codes for styling
 const RESET = '\x1b[0m';
@@ -13,6 +13,8 @@ const GRAY = '\x1b[90m';
 
 const aliceTag = `${MAGENTA}[Alice]${RESET}`;
 const bobTag = `${CYAN}[Bob]${RESET}`;
+const charlieTag = `${YELLOW}[Charlie]${RESET}`;
+const dianaTag = `${GREEN}[Diana]${RESET}`;
 
 /**
  * Creates a formatted header.
@@ -40,13 +42,13 @@ const boxMessage = (title, content) => {
 };
 
 // Simulate two users exchanging encrypted messages
-async function simulateMatrixCommunication() {
+async function simulateSingleMatrixCommunication() {
   console.log(header('Initializing TinyOlm 🚀'));
 
   const server = new FakeMatrixServer();
 
-  const alice = new TinyOlm('alice', 'tiny-computer');
-  const bob = new TinyOlm('bob', 'tiny-computer');
+  const alice = new TinyOlmInstance('alice', 'tiny-computer');
+  const bob = new TinyOlmInstance('bob', 'tiny-computer');
 
   console.log(header('Initializing Accounts 🚀'));
 
@@ -201,8 +203,162 @@ async function simulateMatrixCommunication() {
   console.log(boxMessage(`${bobTag} ${GREEN}Decrypted message (3)${RESET}`, decryptedMessage3));
 
   console.log(header('Conversation Ended ✅'));
-  console.log(header('Simulation Complete 🎉'));
+}
+
+// Simulate multiple users in a group encrypted chat
+async function simulateGroupMatrixCommunication() {
+  console.log(header('Initializing TinyOlm 🚀'));
+
+  const server = new FakeMatrixServer();
+
+  const alice = new TinyOlmInstance('alice', 'tiny-computer');
+  const bob = new TinyOlmInstance('bob', 'tiny-computer');
+  const charlie = new TinyOlmInstance('charlie', 'tiny-computer');
+  const diana = new TinyOlmInstance('diana', 'tiny-computer');
+
+  const users = [alice, bob, charlie, diana];
+  const usersData = { alice, bob, charlie, diana };
+  console.log(header('Initializing Accounts 🚀'));
+
+  await Promise.all([alice.init(), bob.init(), charlie.init(), diana.init()]);
+
+  console.log(header('Generating & Uploading Keys 🔑'));
+
+  for (const user of users) {
+    user.generateOneTimeKeys(5);
+    server.uploadIdentityKeys(user.userId, user.getIdentityKeys());
+    server.uploadOneTimeKeys(user.userId, user.signedOneTimeKeys);
+    user.markKeysAsPublished();
+  }
+
+  console.log(header('Creating and Sharing Group Session 🛡️'));
+
+  // Creates a group session for "room-1"
+  for (const username in usersData) {
+    const user = usersData[username];
+    user.createGroupSession('room-1');
+    const sessionKey = user.exportGroupSession('room-1');
+
+    // User shares the session key with everyone
+    for (const user2 of users) {
+      user2.importGroupSession('room-1', username, sessionKey);
+    }
+  }
+
+  console.log(divider());
+
+  // Alice sends a group message
+  const aliceGroupMessage = 'Hello everyone! 🎉';
+  const encryptedFromAlice = alice.encryptGroupMessage('room-1', aliceGroupMessage);
+
+  console.log(
+    boxMessage(
+      `${aliceTag} ${YELLOW}Encrypted group message${RESET}`,
+      JSON.stringify(encryptedFromAlice, null, 2),
+    ),
+  );
+
+  console.log(divider());
+
+  // Bob, Charlie, and Diana decrypt Alice's message
+  for (const [user, tag] of [
+    [bob, bobTag],
+    [charlie, charlieTag],
+    [diana, dianaTag],
+  ]) {
+    const decrypted = user.decryptGroupMessage('room-1', 'alice', encryptedFromAlice);
+    console.log(boxMessage(`${tag} ${GREEN}Decrypted message${RESET}`, decrypted.plaintext));
+  }
+
+  console.log(divider());
+
+  console.log(header('Bob Sends a Group Reply 💬'));
+
+  // Bob sends a reply
+  const bobGroupReply = 'Hi Alice! 👋 Charlie and Diana, you here?';
+  const encryptedFromBob = bob.encryptGroupMessage('room-1', bobGroupReply);
+
+  console.log(
+    boxMessage(
+      `${bobTag} ${YELLOW}Encrypted group reply${RESET}`,
+      JSON.stringify(encryptedFromBob, null, 2),
+    ),
+  );
+
+  console.log(divider());
+
+  // Alice, Charlie, and Diana decrypt Bob's message
+  for (const [user, tag] of [
+    [alice, aliceTag],
+    [charlie, charlieTag],
+    [diana, dianaTag],
+  ]) {
+    const decrypted = user.decryptGroupMessage('room-1', 'bob', encryptedFromBob);
+    console.log(boxMessage(`${tag} ${GREEN}Decrypted message${RESET}`, decrypted.plaintext));
+  }
+
+  console.log(divider());
+
+  console.log(header('Charlie Joins the Conversation ✨'));
+
+  // Charlie sends a message
+  const charlieGroupReply = 'Hey everyone! So good to see you! 🙌';
+  const encryptedFromCharlie = charlie.encryptGroupMessage('room-1', charlieGroupReply);
+
+  console.log(
+    boxMessage(
+      `${charlieTag} ${YELLOW}Encrypted group reply${RESET}`,
+      JSON.stringify(encryptedFromCharlie, null, 2),
+    ),
+  );
+
+  console.log(divider());
+
+  // Alice, Bob, and Diana decrypt Charlie's message
+  for (const [user, tag] of [
+    [alice, aliceTag],
+    [bob, bobTag],
+    [diana, dianaTag],
+  ]) {
+    const decrypted = user.decryptGroupMessage('room-1', 'charlie', encryptedFromCharlie);
+    console.log(boxMessage(`${tag} ${GREEN}Decrypted message${RESET}`, decrypted.plaintext));
+  }
+
+  console.log(divider());
+
+  console.log(header('Diana Sends a Final Group Message 🎀'));
+
+  // Diana sends a final message
+  const dianaGroupReply = 'Let’s schedule a meeting soon! 🗓️';
+  const encryptedFromDiana = diana.encryptGroupMessage('room-1', dianaGroupReply);
+
+  console.log(
+    boxMessage(
+      `${dianaTag} ${YELLOW}Encrypted group reply${RESET}`,
+      JSON.stringify(encryptedFromDiana, null, 2),
+    ),
+  );
+
+  console.log(divider());
+
+  // Alice, Bob, and Charlie decrypt Diana's message
+  for (const [user, tag] of [
+    [alice, aliceTag],
+    [bob, bobTag],
+    [charlie, charlieTag],
+  ]) {
+    const decrypted = user.decryptGroupMessage('room-1', 'diana', encryptedFromDiana);
+    console.log(boxMessage(`${tag} ${GREEN}Decrypted message${RESET}`, decrypted.plaintext));
+  }
+
+  console.log(header('Group Conversation Ended ✅'));
 }
 
 // Run simulation
+const simulateMatrixCommunication = async () => {
+  await simulateSingleMatrixCommunication();
+  await simulateGroupMatrixCommunication();
+  console.log(header('Simulation Complete 🎉'));
+};
+
 export default simulateMatrixCommunication;
