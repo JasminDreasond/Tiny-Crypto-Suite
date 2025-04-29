@@ -116,13 +116,13 @@ class TinyOlmInstance {
   /**
    * Sets the userId of this instance.
    *
-   * @param {string} newUsername - The new userId.
+   * @param {string} newUserId - The new userId.
    * @throws {Error} Throws if the provided value is not a string.
    */
-  setUserId(newUsername) {
-    if (typeof newUsername !== 'string')
+  setUserId(newUserId) {
+    if (typeof newUserId !== 'string')
       throw new Error('The value provided to userId must be a string.');
-    this.userId = newUsername;
+    this.userId = newUserId;
   }
 
   /**
