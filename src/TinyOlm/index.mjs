@@ -11,18 +11,18 @@ import tinyOlm from './Module.mjs';
  */
 class TinyOlmInstance {
   /**
-   * Creates a new TinyOlm instance for a specific username.
+   * Creates a new TinyOlm instance for a specific userId.
    *
-   * @param {string} username - The username to associate with the account and sessions.
+   * @param {string} userId - The userId to associate with the account and sessions.
    * @param {string} deviceId - The device id to associate with the account and sessions.
    * @param {string} [password] - The optional password to associate with the account and sessions.
    */
-  constructor(username, deviceId, password = '') {
+  constructor(userId, deviceId, password = '') {
     /** @type {string} */
     this.password = password;
 
     /** @type {string} */
-    this.username = username;
+    this.userId = userId;
 
     /** @type {string} */
     this.deviceId = deviceId;
@@ -77,17 +77,17 @@ class TinyOlmInstance {
   }
 
   /**
-   * Validates that a given username follows the Matrix user ID format.
+   * Validates that a given userId follows the Matrix user ID format.
    *
    * A valid Matrix user ID must start with '@', contain at least one character,
    * then a ':', followed by at least one character (e.g., "@user:domain.com").
    *
-   * @param {string} username - The Matrix user ID to validate.
-   * @throws {Error} Throws an error if the username does not match the expected format.
+   * @param {string} userId - The Matrix user ID to validate.
+   * @throws {Error} Throws an error if the userId does not match the expected format.
    * @returns {void}
    */
-  checkUsername(username) {
-    if (!/^@.+:.+$/.test(username)) throw new Error('Invalid Matrix user ID format.');
+  checkUserId(userId) {
+    if (!/^@.+:.+$/.test(userId)) throw new Error('Invalid Matrix user ID format.');
   }
 
   /**
@@ -114,26 +114,26 @@ class TinyOlmInstance {
   }
 
   /**
-   * Sets the username of this instance.
+   * Sets the userId of this instance.
    *
-   * @param {string} newUsername - The new username.
+   * @param {string} newUsername - The new userId.
    * @throws {Error} Throws if the provided value is not a string.
    */
-  setUsername(newUsername) {
+  setUserId(newUsername) {
     if (typeof newUsername !== 'string')
-      throw new Error('The value provided to username must be a string.');
-    this.username = newUsername;
+      throw new Error('The value provided to userId must be a string.');
+    this.userId = newUsername;
   }
 
   /**
-   * Returns the current username.
+   * Returns the current userId.
    *
-   * @returns {string} The current username.
-   * @throws {Error} Throws if the username is not set.
+   * @returns {string} The current userId.
+   * @throws {Error} Throws if the userId is not set.
    */
-  getUsername() {
-    if (typeof this.username !== 'string') throw new Error('No username is set.');
-    return this.username;
+  getUserId() {
+    if (typeof this.userId !== 'string') throw new Error('No userId is set.');
+    return this.userId;
   }
 
   /**
@@ -182,13 +182,13 @@ class TinyOlmInstance {
   /**
    * Export a specific Olm session with a given user.
    *
-   * @param {string} username - The username of the remote device.
+   * @param {string} userId - The userId of the remote device.
    * @param {string} [password=this.password] - The password used to encrypt the pickle.
    * @returns {string} The pickled Olm session.
    * @throws {Error} If the session is not found.
    */
-  exportSession(username, password = this.password) {
-    const sess = this.getSession(username);
+  exportSession(userId, password = this.password) {
+    const sess = this.getSession(userId);
     return sess.pickle(password);
   }
 
@@ -209,13 +209,13 @@ class TinyOlmInstance {
    * Export an inbound group session for a specific room and sender.
    *
    * @param {string} roomId - The ID of the room.
-   * @param {string} username - The sender's username or session owner.
+   * @param {string} userId - The sender's userId or session owner.
    * @param {string} [password=this.password] - The password used to encrypt the pickle.
    * @returns {string} The pickled inbound group session.
    * @throws {Error} If the inbound group session is not found.
    */
-  exportInboundGroupSession(roomId, username, password = this.getPassword()) {
-    const sess = this.getInboundGroupSession(roomId, username);
+  exportInboundGroupSession(roomId, userId, password = this.getPassword()) {
+    const sess = this.getInboundGroupSession(roomId, userId);
     return sess.pickle(password);
   }
 
@@ -261,7 +261,7 @@ class TinyOlmInstance {
   /**
    * Import and restore an Olm session from a pickled string.
    *
-   * @param {string} key - The session key used to index this session (usually username or `username|deviceId`).
+   * @param {string} key - The session key used to index this session (usually userId or `userId|deviceId`).
    * @param {string} pickled - The pickled Olm session string.
    * @param {string} [password=this.password] - The password used to decrypt the pickle.
    * @returns {void}
@@ -328,36 +328,36 @@ class TinyOlmInstance {
   /**
    * Retrieves all active sessions.
    *
-   * @returns {Map<string, Olm.Session>} A map of all active sessions where the key is the username.
+   * @returns {Map<string, Olm.Session>} A map of all active sessions where the key is the userId.
    */
   getAllSessions() {
     return this.sessions;
   }
 
   /**
-   * Retrieves the session for a specific username.
+   * Retrieves the session for a specific userId.
    *
-   * @param {string} username - The username whose session is to be retrieved.
-   * @returns {Olm.Session} The session for the specified username, or null if no session exists.
-   * @throws {Error} Throws an error if no session exists for the specified username.
+   * @param {string} userId - The userId whose session is to be retrieved.
+   * @returns {Olm.Session} The session for the specified userId, or null if no session exists.
+   * @throws {Error} Throws an error if no session exists for the specified userId.
    */
-  getSession(username) {
-    const session = this.sessions.get(username);
-    if (!session) throw new Error(`No session found with ${username}`);
+  getSession(userId) {
+    const session = this.sessions.get(userId);
+    if (!session) throw new Error(`No session found with ${userId}`);
     return session;
   }
 
   /**
-   * Removes the session for a specific username.
+   * Removes the session for a specific userId.
    *
-   * @param {string} username - The username whose session is to be removed.
+   * @param {string} userId - The userId whose session is to be removed.
    * @returns {boolean} Returns true if the session was removed, otherwise false.
-   * @throws {Error} Throws an error if no session exists for the specified username.
+   * @throws {Error} Throws an error if no session exists for the specified userId.
    */
-  removeSession(username) {
-    const session = this.getSession(username);
+  removeSession(userId) {
+    const session = this.getSession(userId);
     session.free();
-    return this.sessions.delete(username);
+    return this.sessions.delete(userId);
   }
 
   /**
@@ -383,11 +383,11 @@ class TinyOlmInstance {
   /**
    * Gets the unique session ID for a group session per user.
    * @param {string} roomId
-   * @param {string} [username]
+   * @param {string} [userId]
    * @returns {string}
    */
-  #getGroupSessionId(roomId, username) {
-    return `${username}${typeof roomId === 'string' ? `:${roomId}` : ''}`;
+  #getGroupSessionId(roomId, userId) {
+    return `${userId}${typeof roomId === 'string' ? `:${roomId}` : ''}`;
   }
 
   /**
@@ -418,15 +418,15 @@ class TinyOlmInstance {
   /**
    * Imports an inbound group session using a provided session key.
    * @param {string} roomId
-   * @param {string} username
+   * @param {string} userId
    * @param {string} sessionKey
    * @returns {void}
    */
-  importGroupSessionId(roomId, username, sessionKey) {
+  importGroupSessionId(roomId, userId, sessionKey) {
     const Olm = tinyOlm.getOlm();
     const inboundSession = new Olm.InboundGroupSession();
     inboundSession.create(sessionKey);
-    this.groupInboundSessions.set(this.#getGroupSessionId(roomId, username), inboundSession);
+    this.groupInboundSessions.set(this.#getGroupSessionId(roomId, userId), inboundSession);
   }
 
   /**
@@ -469,28 +469,28 @@ class TinyOlmInstance {
   }
 
   /**
-   * Returns a specific inbound group session by room ID and username.
+   * Returns a specific inbound group session by room ID and userId.
    * @param {string} roomId
-   * @param {string} [username]
+   * @param {string} [userId]
    * @returns {Olm.InboundGroupSession}
-   * @throws {Error} If no inbound session exists for the given room and username.
+   * @throws {Error} If no inbound session exists for the given room and userId.
    */
-  getInboundGroupSession(roomId, username) {
-    const sessionId = this.#getGroupSessionId(roomId, username);
+  getInboundGroupSession(roomId, userId) {
+    const sessionId = this.#getGroupSessionId(roomId, userId);
     const session = this.groupInboundSessions.get(sessionId);
     if (!session)
-      throw new Error(`No inbound group session found for room: ${roomId}, username: ${username}`);
+      throw new Error(`No inbound group session found for room: ${roomId}, userId: ${userId}`);
     return session;
   }
 
   /**
-   * Removes a specific inbound group session by room ID and username.
+   * Removes a specific inbound group session by room ID and userId.
    * @param {string} roomId
-   * @param {string} username
+   * @param {string} userId
    * @returns {boolean} True if a session was removed, false otherwise.
    */
-  removeInboundGroupSession(roomId, username) {
-    const sessionId = this.#getGroupSessionId(roomId, username);
+  removeInboundGroupSession(roomId, userId) {
+    const sessionId = this.#getGroupSessionId(roomId, userId);
     const session = this.getInboundGroupSession(sessionId);
     session.free();
     return this.groupInboundSessions.delete(sessionId);
@@ -522,19 +522,19 @@ class TinyOlmInstance {
   /**
    * Decrypts an encrypted group message using the inbound group session.
    * @param {string} roomId
-   * @param {string} username
+   * @param {string} userId
    * @param {{
    *   body: string,
    *   session_id: string,
    *   message_index: number
    * }} encryptedMessage
    * @returns {{ message_index: number; plaintext: string; }}
-   * @throws {Error} If no inbound session exists for the given room and username.
+   * @throws {Error} If no inbound session exists for the given room and userId.
    */
-  decryptGroupMessage(roomId, username, encryptedMessage) {
-    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, username));
+  decryptGroupMessage(roomId, userId, encryptedMessage) {
+    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId));
     if (!session)
-      throw new Error(`No inbound group session found for room: ${roomId} and user: ${username}`);
+      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
     return session.decrypt(encryptedMessage.body);
   }
 
@@ -565,7 +565,7 @@ class TinyOlmInstance {
   /**
    * Decrypts an encrypted content using the inbound group session.
    * @param {string} roomId
-   * @param {string} username
+   * @param {string} userId
    * @param {{
    *   body: string,
    *   session_id: string,
@@ -573,12 +573,12 @@ class TinyOlmInstance {
    * }} encryptedMessage
    * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
    * @returns {{ message_index: number; content: string; }}
-   * @throws {Error} If no inbound session exists for the given room and username.
+   * @throws {Error} If no inbound session exists for the given room and userId.
    */
-  decryptGroupContent(roomId, username, encryptedMessage, expectedType) {
-    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, username));
+  decryptGroupContent(roomId, userId, encryptedMessage, expectedType) {
+    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId));
     if (!session)
-      throw new Error(`No inbound group session found for room: ${roomId} and user: ${username}`);
+      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
     const result = session.decrypt(encryptedMessage.body);
 
     const { value } = this.isDeep
@@ -631,7 +631,7 @@ class TinyOlmInstance {
       signedKeys[keyId] = {
         key,
         signatures: {
-          [this.getUsername()]: {
+          [this.getUserId()]: {
             [`ed25519:${identityKeys.ed25519}`]: signature,
           },
         },
@@ -668,7 +668,7 @@ class TinyOlmInstance {
    *
    * @param {string} theirIdentityKey - The identity key of the target user.
    * @param {string} theirOneTimeKey - The one-time key of the target user.
-   * @param {string} theirUsername - The username of the target user.
+   * @param {string} theirUsername - The userId of the target user.
    * @returns {void}
    * @throws {Error} Throws an error if account is not initialized.
    */
@@ -686,7 +686,7 @@ class TinyOlmInstance {
    *
    * @param {string} senderIdentityKey - The sender's identity key.
    * @param {string} ciphertext - The ciphertext received.
-   * @param {string} senderUsername - The username of the sender.
+   * @param {string} senderUsername - The userId of the sender.
    * @returns {void}
    * @throws {Error} Throws an error if account is not initialized.
    */
@@ -700,13 +700,13 @@ class TinyOlmInstance {
   }
 
   /**
-   * Checks if there is an active session with a specific username.
+   * Checks if there is an active session with a specific userId.
    *
-   * @param {string} username - The username to check.
+   * @param {string} userId - The userId to check.
    * @returns {boolean} True if a session exists, false otherwise.
    */
-  hasSession(username) {
-    return this.sessions.has(username);
+  hasSession(userId) {
+    return this.sessions.has(userId);
   }
 
   /**
@@ -720,23 +720,23 @@ class TinyOlmInstance {
     const identityKeys = this.getIdentityKeys();
     const oneTimeKeys = this.getOneTimeKeys();
     const deviceId = this.getDeviceId();
-    const username = this.getUsername();
+    const userId = this.getUserId();
 
     return {
       device_id: deviceId,
-      user_id: username,
+      user_id: userId,
       algorithms: ['m.olm.v1.curve25519-aes-sha2'],
       keys: {
         [`curve25519:${deviceId}`]: identityKeys.curve25519,
         [`ed25519:${deviceId}`]: identityKeys.ed25519,
       },
       signatures: {
-        [username]: {
+        [userId]: {
           [`ed25519:${deviceId}`]: this.account.sign(
             JSON.stringify({
               algorithms: ['m.olm.v1.curve25519-aes-sha2'],
               device_id: deviceId,
-              user_id: username,
+              user_id: userId,
               keys: {
                 [`curve25519:${deviceId}`]: identityKeys.curve25519,
                 [`ed25519:${deviceId}`]: identityKeys.ed25519,
@@ -828,10 +828,10 @@ class TinyOlmInstance {
   /**
    * Encrypts a plaintext message to a specified user.
    *
-   * @param {string} toUsername - The username of the recipient.
+   * @param {string} toUsername - The userId of the recipient.
    * @param {string} plaintext - The plaintext message to encrypt.
    * @returns {EncryptedMessage} The encrypted message.
-   * @throws {Error} Throws an error if no session exists with the given username.
+   * @throws {Error} Throws an error if no session exists with the given userId.
    */
   encryptMessage(toUsername, plaintext) {
     const session = this.sessions.get(toUsername);
@@ -842,11 +842,11 @@ class TinyOlmInstance {
   /**
    * Decrypts a received ciphertext message from a specified user.
    *
-   * @param {string} fromUsername - The username of the sender.
+   * @param {string} fromUsername - The userId of the sender.
    * @param {number} messageType - The type of the message (0: pre-key, 1: message).
    * @param {string} ciphertext - The ciphertext to decrypt.
    * @returns {string} The decrypted plaintext message.
-   * @throws {Error} Throws an error if no session exists with the given username.
+   * @throws {Error} Throws an error if no session exists with the given userId.
    */
   decryptMessage(fromUsername, messageType, ciphertext) {
     const session = this.sessions.get(fromUsername);
@@ -860,10 +860,10 @@ class TinyOlmInstance {
   /**
    * Encrypts a data to a specified user.
    *
-   * @param {string} toUsername - The username of the recipient.
+   * @param {string} toUsername - The userId of the recipient.
    * @param {*} data - The content to encrypt.
    * @returns {EncryptedMessage} The encrypted message.
-   * @throws {Error} Throws an error if no session exists with the given username.
+   * @throws {Error} Throws an error if no session exists with the given userId.
    */
   encrypt(toUsername, data) {
     const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
@@ -873,12 +873,12 @@ class TinyOlmInstance {
   /**
    * Decrypts a received data from a specified user.
    *
-   * @param {string} fromUsername - The username of the sender.
+   * @param {string} fromUsername - The userId of the sender.
    * @param {number} messageType - The type of the message (0: pre-key, 1: message).
    * @param {string} plaintext - The decrypted content to decrypt.
    * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
    * @returns {*} The decrypted plaintext message.
-   * @throws {Error} Throws an error if no session exists with the given username.
+   * @throws {Error} Throws an error if no session exists with the given userId.
    */
   decrypt(fromUsername, messageType, plaintext, expectedType = null) {
     const decrypted = this.decryptMessage(fromUsername, messageType, plaintext);
