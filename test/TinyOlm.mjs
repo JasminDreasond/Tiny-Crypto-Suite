@@ -97,6 +97,23 @@ async function simulateSingleMatrixCommunication() {
   const aliceIdentityKey = server.fetchIdentityKey('alice');
   bob.createInboundSession(aliceIdentityKey, encryptedForBob1.body, 'alice');
 
+  console.log(header('Testing Export Session 🛡️'));
+
+  // Test import and export instance
+  const bobSession = bob.exportInstance();
+  console.log(
+    boxMessage(`${bobTag} ${YELLOW}Session data${RESET}`, JSON.stringify(bobSession, null, 2)),
+  );
+
+  console.log(header('Testing Import Session 🛡️'));
+
+  bob.dispose();
+  await bob.importInstance(bobSession);
+
+  console.log(divider());
+
+  console.log(header('Initializing chat 🚀'));
+
   // Step 5: Bob decrypts the message
   const decryptedMessage1 = bob.decryptMessage(
     'alice',
@@ -215,13 +232,14 @@ async function simulateSingleMatrixCommunication() {
 
   console.log(divider());
 
-  const decryptedMessage4 = bob.decrypt(
-    'alice',
-    encryptedForBob4.type,
-    encryptedForBob4.body,
-  );
+  const decryptedMessage4 = bob.decrypt('alice', encryptedForBob4.type, encryptedForBob4.body);
 
-  console.log(boxMessage(`${bobTag} ${GREEN}Decrypted message (4)${RESET}`, JSON.stringify(decryptedMessage4, null, 2)));
+  console.log(
+    boxMessage(
+      `${bobTag} ${GREEN}Decrypted message (4)${RESET}`,
+      JSON.stringify(decryptedMessage4, null, 2),
+    ),
+  );
 
   console.log(header('Conversation Ended ✅'));
 }
@@ -258,15 +276,32 @@ async function simulateGroupMatrixCommunication() {
   for (const username in usersData) {
     const user = usersData[username];
     user.createGroupSession('room-1');
-    const sessionKey = user.exportGroupSession('room-1');
+    const sessionKey = user.exportGroupSessionId('room-1');
 
     // User shares the session key with everyone
     for (const user2 of users) {
-      user2.importGroupSession('room-1', username, sessionKey);
+      user2.importGroupSessionId('room-1', username, sessionKey);
     }
   }
 
   console.log(divider());
+
+  console.log(header('Testing Export Session 🛡️'));
+
+  // Test import and export instance
+  const bobSession = bob.exportInstance();
+  console.log(
+    boxMessage(`${bobTag} ${YELLOW}Session data${RESET}`, JSON.stringify(bobSession, null, 2)),
+  );
+
+  console.log(header('Testing Import Session 🛡️'));
+
+  bob.dispose();
+  await bob.importInstance(bobSession);
+
+  console.log(divider());
+
+  console.log(header('Initializing chat 🚀'));
 
   // Alice sends a group message
   const aliceGroupMessage = 'Hello everyone! 🎉';
@@ -392,7 +427,12 @@ async function simulateGroupMatrixCommunication() {
     [charlie, charlieTag],
   ]) {
     const decrypted = user.decryptGroupContent('room-1', 'diana', encryptedDataFromDiana);
-    console.log(boxMessage(`${tag} ${GREEN}Decrypted content${RESET}`, JSON.stringify(decrypted.content, null, 2)));
+    console.log(
+      boxMessage(
+        `${tag} ${GREEN}Decrypted content${RESET}`,
+        JSON.stringify(decrypted.content, null, 2),
+      ),
+    );
   }
 
   console.log(header('Group Conversation Ended ✅'));

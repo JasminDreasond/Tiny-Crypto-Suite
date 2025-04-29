@@ -15,8 +15,12 @@ class TinyOlmInstance {
    *
    * @param {string} username - The username to associate with the account and sessions.
    * @param {string} deviceId - The device id to associate with the account and sessions.
+   * @param {string} [password] - The optional password to associate with the account and sessions.
    */
-  constructor(username, deviceId) {
+  constructor(username, deviceId, password = '') {
+    /** @type {string} */
+    this.password = password;
+
     /** @type {string} */
     this.username = username;
 
@@ -84,6 +88,241 @@ class TinyOlmInstance {
    */
   checkUsername(username) {
     if (!/^@.+:.+$/.test(username)) throw new Error('Invalid Matrix user ID format.');
+  }
+
+  /**
+   * Sets the new password of instance.
+   *
+   * @param {string} newPassword - The new password.
+   * @throws {Error} Throws if the provided value is not a string.
+   */
+  setPassword(newPassword) {
+    if (typeof newPassword !== 'string')
+      throw new Error('The value provided to password must be a string.');
+    this.password = newPassword;
+  }
+
+  /**
+   * Returns the current password used for (un)pickling.
+   *
+   * @returns {string} The current password.
+   * @throws {Error} Throws if the password is not set.
+   */
+  getPassword() {
+    if (typeof this.password !== 'string') throw new Error('No password is set.');
+    return this.password;
+  }
+
+  /**
+   * Sets the username of this instance.
+   *
+   * @param {string} newUsername - The new username.
+   * @throws {Error} Throws if the provided value is not a string.
+   */
+  setUsername(newUsername) {
+    if (typeof newUsername !== 'string')
+      throw new Error('The value provided to username must be a string.');
+    this.username = newUsername;
+  }
+
+  /**
+   * Returns the current username.
+   *
+   * @returns {string} The current username.
+   * @throws {Error} Throws if the username is not set.
+   */
+  getUsername() {
+    if (typeof this.username !== 'string') throw new Error('No username is set.');
+    return this.username;
+  }
+
+  /**
+   * Sets the device ID of this instance.
+   *
+   * @param {string} newDeviceId - The new device ID.
+   * @throws {Error} Throws if the provided value is not a string.
+   */
+  setDeviceId(newDeviceId) {
+    if (typeof newDeviceId !== 'string')
+      throw new Error('The value provided to deviceId must be a string.');
+    this.deviceId = newDeviceId;
+  }
+
+  /**
+   * Returns the current device ID.
+   *
+   * @returns {string} The current device ID.
+   * @throws {Error} Throws if the device ID is not set.
+   */
+  getDeviceId() {
+    if (typeof this.deviceId !== 'string') throw new Error('No deviceId is set.');
+    return this.deviceId;
+  }
+
+  /**
+   * @typedef {Object} ExportedOlmInstance
+   * @property {string|null} account - Pickled Olm.Account object.
+   * @property {Record<string, string>|null} sessions - Pickled Olm.Session objects, indexed by session ID.
+   * @property {Record<string, string>|null} groupSessions - Pickled Olm.OutboundGroupSession objects, indexed by room/session ID.
+   * @property {Record<string, string>|null} groupInboundSessions - Pickled Olm.InboundGroupSession objects, indexed by sender key or session ID.
+   */
+
+  /**
+   * Export the current Olm account as a pickled string.
+   *
+   * @param {string} [password=this.password] - The password used to encrypt the pickle.
+   * @returns {string} The pickled Olm account.
+   * @throws {Error} If the account is not initialized.
+   */
+  exportAccount(password = this.getPassword()) {
+    if (!this.account) throw new Error('Account is not initialized.');
+    return this.account.pickle(password);
+  }
+
+  /**
+   * Export a specific Olm session with a given user.
+   *
+   * @param {string} username - The username of the remote device.
+   * @param {string} [password=this.password] - The password used to encrypt the pickle.
+   * @returns {string} The pickled Olm session.
+   * @throws {Error} If the session is not found.
+   */
+  exportSession(username, password = this.password) {
+    const sess = this.getSession(username);
+    return sess.pickle(password);
+  }
+
+  /**
+   * Export an outbound group session for a specific room.
+   *
+   * @param {string} roomId - The ID of the room.
+   * @param {string} [password=this.password] - The password used to encrypt the pickle.
+   * @returns {string} The pickled outbound group session.
+   * @throws {Error} If the group session is not found.
+   */
+  exportGroupSession(roomId, password = this.getPassword()) {
+    const sess = this.getGroupSession(roomId);
+    return sess.pickle(password);
+  }
+
+  /**
+   * Export an inbound group session for a specific room and sender.
+   *
+   * @param {string} roomId - The ID of the room.
+   * @param {string} username - The sender's username or session owner.
+   * @param {string} [password=this.password] - The password used to encrypt the pickle.
+   * @returns {string} The pickled inbound group session.
+   * @throws {Error} If the inbound group session is not found.
+   */
+  exportInboundGroupSession(roomId, username, password = this.getPassword()) {
+    const sess = this.getInboundGroupSession(roomId, username);
+    return sess.pickle(password);
+  }
+
+  /**
+   * @param {string} [password] The password used to pickle. If you do not enter any, the predefined password will be used.
+   * @returns {ExportedOlmInstance} Serial structure
+   */
+  exportInstance(password = this.getPassword()) {
+    return {
+      account: this.exportAccount(),
+      sessions: Object.fromEntries(
+        Array.from(this.sessions.entries()).map(([key, sess]) => [key, sess.pickle(password)]),
+      ),
+      groupSessions: Object.fromEntries(
+        Array.from(this.groupSessions.entries()).map(([key, group]) => [
+          key,
+          group.pickle(password),
+        ]),
+      ),
+      groupInboundSessions: Object.fromEntries(
+        Array.from(this.groupInboundSessions.entries()).map(([key, inbound]) => [
+          key,
+          inbound.pickle(password),
+        ]),
+      ),
+    };
+  }
+
+  /**
+   * Import and restore an Olm account from a pickled string.
+   *
+   * @param {string} pickled - The pickled Olm account string.
+   * @param {string} [password=this.password] - The password used to decrypt the pickle.
+   * @returns {void}
+   */
+  importAccount(pickled, password = this.getPassword()) {
+    const Olm = tinyOlm.getOlm();
+    const account = new Olm.Account();
+    account.unpickle(password, pickled);
+    this.account = account;
+  }
+
+  /**
+   * Import and restore an Olm session from a pickled string.
+   *
+   * @param {string} key - The session key used to index this session (usually username or `username|deviceId`).
+   * @param {string} pickled - The pickled Olm session string.
+   * @param {string} [password=this.password] - The password used to decrypt the pickle.
+   * @returns {void}
+   */
+  importSession(key, pickled, password = this.getPassword()) {
+    const Olm = tinyOlm.getOlm();
+    const sess = new Olm.Session();
+    sess.unpickle(password, pickled);
+    this.sessions.set(key, sess);
+  }
+
+  /**
+   * Import and restore an outbound group session from a pickled string.
+   *
+   * @param {string} key - The key used to index the group session (usually the roomId).
+   * @param {string} pickled - The pickled Olm.OutboundGroupSession string.
+   * @param {string} [password=this.password] - The password used to decrypt the pickle.
+   * @returns {void}
+   */
+  importGroupSession(key, pickled, password = this.getPassword()) {
+    const Olm = tinyOlm.getOlm();
+    const group = new Olm.OutboundGroupSession();
+    group.unpickle(password, pickled);
+    this.groupSessions.set(key, group);
+  }
+
+  /**
+   * Import and restore an inbound group session from a pickled string.
+   *
+   * @param {string} key - The key used to index the inbound group session (usually sender key or `roomId|sender`).
+   * @param {string} pickled - The pickled Olm.InboundGroupSession string.
+   * @param {string} [password=this.password] - The password used to decrypt the pickle.
+   * @returns {void}
+   */
+  importInboundGroupSession(key, pickled, password = this.getPassword()) {
+    const Olm = tinyOlm.getOlm();
+    const inbound = new Olm.InboundGroupSession();
+    inbound.unpickle(password, pickled);
+    this.groupInboundSessions.set(key, inbound);
+  }
+
+  /**
+   * @param {ExportedOlmInstance} data Returned object of exportInstance
+   * @param {string} [password] The password used to pickle
+   * @returns {Promise<void>}
+   */
+  async importInstance(data, password = '') {
+    await tinyOlm.fetchOlm();
+    if (data.account) this.importAccount(data.account, password);
+
+    if (data.sessions)
+      for (const [key, pickled] of Object.entries(data.sessions))
+        this.importSession(key, pickled, password);
+
+    if (data.groupSessions)
+      for (const [key, pickled] of Object.entries(data.groupSessions))
+        this.importGroupSession(key, pickled, password);
+
+    if (data.groupInboundSessions)
+      for (const [key, pickled] of Object.entries(data.groupInboundSessions))
+        this.importInboundGroupSession(key, pickled, password);
   }
 
   /**
@@ -170,7 +409,7 @@ class TinyOlmInstance {
    * @returns {string}
    * @throws {Error} If no outbound session exists for the given room.
    */
-  exportGroupSession(roomId) {
+  exportGroupSessionId(roomId) {
     const outboundSession = this.groupSessions.get(roomId);
     if (!outboundSession) throw new Error(`No outbound group session found for room: ${roomId}`);
     return outboundSession.session_key();
@@ -183,7 +422,7 @@ class TinyOlmInstance {
    * @param {string} sessionKey
    * @returns {void}
    */
-  importGroupSession(roomId, username, sessionKey) {
+  importGroupSessionId(roomId, username, sessionKey) {
     const Olm = tinyOlm.getOlm();
     const inboundSession = new Olm.InboundGroupSession();
     inboundSession.create(sessionKey);
@@ -392,7 +631,7 @@ class TinyOlmInstance {
       signedKeys[keyId] = {
         key,
         signatures: {
-          [this.username]: {
+          [this.getUsername()]: {
             [`ed25519:${identityKeys.ed25519}`]: signature,
           },
         },
@@ -480,25 +719,27 @@ class TinyOlmInstance {
     if (!this.account) throw new Error('Account is not initialized.');
     const identityKeys = this.getIdentityKeys();
     const oneTimeKeys = this.getOneTimeKeys();
+    const deviceId = this.getDeviceId();
+    const username = this.getUsername();
 
     return {
-      device_id: this.deviceId,
-      user_id: this.username,
+      device_id: deviceId,
+      user_id: username,
       algorithms: ['m.olm.v1.curve25519-aes-sha2'],
       keys: {
-        [`curve25519:${this.deviceId}`]: identityKeys.curve25519,
-        [`ed25519:${this.deviceId}`]: identityKeys.ed25519,
+        [`curve25519:${deviceId}`]: identityKeys.curve25519,
+        [`ed25519:${deviceId}`]: identityKeys.ed25519,
       },
       signatures: {
-        [this.username]: {
-          [`ed25519:${this.deviceId}`]: this.account.sign(
+        [username]: {
+          [`ed25519:${deviceId}`]: this.account.sign(
             JSON.stringify({
               algorithms: ['m.olm.v1.curve25519-aes-sha2'],
-              device_id: this.deviceId,
-              user_id: this.username,
+              device_id: deviceId,
+              user_id: username,
               keys: {
-                [`curve25519:${this.deviceId}`]: identityKeys.curve25519,
-                [`ed25519:${this.deviceId}`]: identityKeys.ed25519,
+                [`curve25519:${deviceId}`]: identityKeys.curve25519,
+                [`ed25519:${deviceId}`]: identityKeys.ed25519,
               },
             }),
           ),
