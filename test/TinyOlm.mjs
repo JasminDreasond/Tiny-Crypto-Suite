@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import FakeMatrixServer from '../dist/TinyOlm/FakeMatrixServer.mjs';
-import { TinyOlmInstance } from '../dist/index.mjs';
+import { TinyOlm } from '../dist/index.mjs';
 
 // Color codes for styling
 const RESET = '\x1b[0m';
@@ -48,8 +48,8 @@ async function simulateSingleMatrixCommunication() {
 
   const server = new FakeMatrixServer();
 
-  const alice = new TinyOlmInstance('alice', 'tiny-computer');
-  const bob = new TinyOlmInstance('bob', 'tiny-computer');
+  const alice = new TinyOlm.Instance('alice', 'tiny-computer');
+  const bob = new TinyOlm.Instance('bob', 'tiny-computer');
 
   console.log(header('Initializing Accounts 🚀'));
 
@@ -255,10 +255,10 @@ async function simulateGroupMatrixCommunication() {
 
   const server = new FakeMatrixServer();
 
-  const alice = new TinyOlmInstance('alice', 'tiny-computer');
-  const bob = new TinyOlmInstance('bob', 'tiny-computer');
-  const charlie = new TinyOlmInstance('charlie', 'tiny-computer');
-  const diana = new TinyOlmInstance('diana', 'tiny-computer');
+  const alice = new TinyOlm.Instance('alice', 'tiny-computer');
+  const bob = new TinyOlm.Instance('bob', 'tiny-computer');
+  const charlie = new TinyOlm.Instance('charlie', 'tiny-computer');
+  const diana = new TinyOlm.Instance('diana', 'tiny-computer');
 
   const users = [alice, bob, charlie, diana];
   const usersData = { alice, bob, charlie, diana };

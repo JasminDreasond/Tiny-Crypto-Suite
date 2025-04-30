@@ -1,3 +1,3 @@
-import TinyOlmInstance from '../TinyOlm/index.mjs';
+import TinyOlm from '../TinyOlm/index.mjs';
 
-export { TinyOlmInstance };
+export { TinyOlm };
