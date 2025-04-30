@@ -1,3 +1,6 @@
+import { TinyPromiseQueue } from 'tiny-essentials';
+import { EventEmitter } from 'events';
+
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 import tinyOlm from './Module.mjs';
 
@@ -41,10 +44,177 @@ class TinyOlmInstance {
   }
 
   /**
+   * Important instance used to make event emitter.
+   * @type {EventEmitter}
+   */
+  #events = new EventEmitter();
+
+  /**
+   * Important instance used to make private db event emitter.
+   * @type {EventEmitter}
+   */
+  #dbEvents = new EventEmitter();
+
+  /**
+   * Emits an event with optional arguments to all system emit.
+   * @param {string | symbol} event - The name of the event to emit.
+   * @param {...any} args - Arguments passed to event listeners.
+   */
+  #emit(event, ...args) {
+    this.#dbEvents.emit(event, ...args);
+    this.#events.emit(event, ...args);
+  }
+
+  /**
+   * List of event names used in the EventEmitter.
+   * Each key maps to its string identifier.
+   * @constant
+   * @type {Object<string, string>}
+   */
+  static Events = {
+    /** Emits when a value needs to be stored in the database */
+    DbPut: 'DbPut',
+
+    /** Sets the user's password */
+    SetPassword: 'SetPassword',
+    /** Sets the unique user ID */
+    SetUserId: 'SetUserId',
+    /** Sets the current device ID */
+    SetDeviceId: 'SetDeviceId',
+
+    /** Imports a account (usually from backup or export) */
+    ImportAccount: 'ImportAccount',
+    /** Imports a user session */
+    ImportSession: 'ImportSession',
+    /** Imports a Megolm group session */
+    ImportGroupSession: 'ImportGroupSession',
+    /** Imports an inbound Megolm group session (for receiving messages) */
+    ImportInboundGroupSession: 'ImportInboundGroupSession',
+    /** Imports a session by ID of a group session */
+    ImportGroupSessionId: 'ImportGroupSessionId',
+
+    /** Removes a single user session  */
+    RemoveSession: 'RemoveSession',
+    /** Removes a specific Megolm group session */
+    RemoveGroupSession: 'RemoveGroupSession',
+    /** Removes a specific inbound Megolm group session */
+    RemoveInboundGroupSession: 'RemoveInboundGroupSession',
+
+    /** Clears all stored user sessions */
+    ClearSessions: 'ClearSessions',
+    /** Clears all inbound group sessions */
+    ClearInboundGroupSessions: 'ClearInboundGroupSessions',
+    /** Clears all outbound group sessions */
+    ClearGroupSessions: 'ClearGroupSessions',
+
+    /** Creates a new cryptographic account (fresh keys, etc.) */
+    CreateAccount: 'CreateAccount',
+    /** Creates a new Megolm outbound group session */
+    CreateGroupSession: 'CreateGroupSession',
+    /** Creates an inbound Olm session for receiving messages */
+    CreateInboundSession: 'CreateInboundSession',
+    /** Creates an outbound Olm session for sending messages */
+    CreateOutboundSession: 'CreateOutboundSession',
+
+    /** Signs all remaining one-time keys (after upload) */
+    SignOneTimeKeys: 'SignOneTimeKeys',
+    /** Marks keys as already published, preventing reuse */
+    MarkKeysAsPublished: 'MarkKeysAsPublished',
+
+    /** Resets the current cryptographic account (destroys keys and sessions) */
+    ResetAccount: 'ResetAccount',
+  };
+
+  /**
+   * @typedef {(...args: any[]) => void} ListenerCallback
+   * A generic callback function used for event listeners.
+   */
+
+  /**
+   * Sets the maximum number of listeners for the internal event emitter.
+   *
+   * @param {number} max - The maximum number of listeners allowed.
+   */
+  setMaxListeners(max) {
+    this.#events.setMaxListeners(max);
+  }
+
+  /**
+   * Emits an event with optional arguments.
+   * @param {string | symbol} event - The name of the event to emit.
+   * @param {...any} args - Arguments passed to event listeners.
+   * @returns {boolean} `true` if the event had listeners, `false` otherwise.
+   */
+  emit(event, ...args) {
+    return this.#events.emit(event, ...args);
+  }
+
+  /**
+   * Registers a listener for the specified event.
+   * @param {string | symbol} event - The name of the event to listen for.
+   * @param {ListenerCallback} listener - The callback function to invoke.
+   * @returns {this} The current class instance (for chaining).
+   */
+  on(event, listener) {
+    this.#events.on(event, listener);
+    return this;
+  }
+
+  /**
+   * Registers a one-time listener for the specified event.
+   * @param {string | symbol} event - The name of the event to listen for once.
+   * @param {ListenerCallback} listener - The callback function to invoke.
+   * @returns {this} The current class instance (for chaining).
+   */
+  once(event, listener) {
+    this.#events.once(event, listener);
+    return this;
+  }
+
+  /**
+   * Removes a listener from the specified event.
+   * @param {string | symbol} event - The name of the event.
+   * @param {ListenerCallback} listener - The listener to remove.
+   * @returns {this} The current class instance (for chaining).
+   */
+  off(event, listener) {
+    this.#events.off(event, listener);
+    return this;
+  }
+
+  /**
+   * Alias for `on`.
+   * @param {string | symbol} event - The name of the event.
+   * @param {ListenerCallback} listener - The callback to register.
+   * @returns {this} The current class instance (for chaining).
+   */
+  addListener(event, listener) {
+    this.#events.addListener(event, listener);
+    return this;
+  }
+
+  /**
+   * Alias for `off`.
+   * @param {string | symbol} event - The name of the event.
+   * @param {ListenerCallback} listener - The listener to remove.
+   * @returns {this} The current class instance (for chaining).
+   */
+  removeListener(event, listener) {
+    this.#events.removeListener(event, listener);
+    return this;
+  }
+
+  /**
    * Important instance used to validate values.
    * @type {TinyCryptoParser}
    */
   #parser = new TinyCryptoParser();
+
+  /**
+   * Important instance used to make request queue.
+   * @type {TinyPromiseQueue}
+   */
+  #queue = new TinyPromiseQueue();
 
   /**
    * Add a new value type and its converter function.
@@ -77,6 +247,225 @@ class TinyOlmInstance {
   }
 
   /**
+   * Checks if the current environment is a browser with IndexedDB support.
+   * @throws {Error} If not running in a browser or if IndexedDB is unavailable.
+   */
+  validateIsBrowser() {
+    if (typeof indexedDB === 'undefined')
+      throw new Error('IndexedDB is only available in browser environments.');
+  }
+
+  /** @type {string|null} */
+  #dbName = null;
+  /** @type {IDBDatabase|null} */
+  #db = null;
+  /** @type {number} */
+  #dbVersion = 1;
+
+  /**
+   * Watches for changes in account and session data to auto-persist them in IndexedDB.
+   * Internally wraps objects in Proxy to detect mutations.
+   */
+  #watchForPickleChanges() {
+    this.#dbEvents.setMaxListeners(1000);
+
+    this.#dbEvents.on(TinyOlmInstance.Events.SetPassword, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.SetUserId, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.SetDeviceId, () => {});
+
+    this.#dbEvents.on(TinyOlmInstance.Events.ImportAccount, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.ImportSession, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.ImportGroupSession, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.ImportInboundGroupSession, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.ImportGroupSessionId, () => {});
+
+    this.#dbEvents.on(TinyOlmInstance.Events.RemoveSession, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.RemoveGroupSession, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.RemoveInboundGroupSession, () => {});
+
+    this.#dbEvents.on(TinyOlmInstance.Events.ClearSessions, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.ClearInboundGroupSessions, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.ClearGroupSessions, () => {});
+
+    this.#dbEvents.on(TinyOlmInstance.Events.CreateAccount, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.CreateGroupSession, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.CreateInboundSession, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.CreateOutboundSession, () => {});
+
+    this.#dbEvents.on(TinyOlmInstance.Events.SignOneTimeKeys, () => {});
+    this.#dbEvents.on(TinyOlmInstance.Events.MarkKeysAsPublished, () => {});
+
+    this.#dbEvents.on(TinyOlmInstance.Events.ResetAccount, () => {});
+
+    // this.#idbPut('account', 'main', this.getAccountPickle());
+    // this.#idbPut('sessions', userId, this.getSessionPickle(userId));
+  }
+
+  /**
+   * Gets a value from IndexedDB by key.
+   *
+   * @param {string} store - The store name.
+   * @param {IDBValidKey} key - The key to retrieve.
+   * @returns {Promise<any>} Resolves with the stored value or undefined.
+   */
+  #idbGet(store, key) {
+    return new Promise((resolve, reject) => {
+      const tx = this.getDb().transaction([store], 'readonly');
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Gets all key-value entries from a store in IndexedDB.
+   *
+   * @param {string} store - The store name.
+   * @returns {Promise<Record<string, any>>} Resolves with all entries.
+   */
+  #idbGetAll(store) {
+    return new Promise((resolve, reject) => {
+      const tx = this.getDb().transaction([store], 'readonly');
+      const storeObj = tx.objectStore(store);
+      const req = storeObj.getAllKeys();
+      /** @type {Record<string, any>} */
+      const result = {};
+      req.onsuccess = () => {
+        const keys = req.result;
+        Promise.all(
+          keys.map(async (/** @type {*} */ key) => {
+            result[key] = await this.#idbGet(store, key);
+          }),
+        )
+          .then(() => resolve(result))
+          .catch(reject);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Stores a value in the specified IndexedDB store.
+   *
+   * @param {string} store - The store name.
+   * @param {IDBValidKey} key - The key to store under.
+   * @param {any} value - The value to store.
+   * @returns {Promise<IDBValidKey>}
+   */
+  #idbPut(store, key, value) {
+    return this.#queue.enqueue(() => {
+      const tx = this.getDb().transaction([store], 'readwrite');
+      const req = tx.objectStore(store).put(value, key);
+      return new Promise((resolve, reject) => {
+        req.onsuccess = () => {
+          this.#events.emit(TinyOlmInstance.Events.DbPut, store, key, value);
+          resolve(req.result);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    });
+  }
+
+  /**
+   * Returns the name of the current IndexedDB database.
+   *
+   * @returns {string} The database name.
+   * @throws {Error} If the database name is not set.
+   */
+  getDbName() {
+    if (typeof this.#dbName !== 'string')
+      throw new Error('Invalid internal state: #dbName must be a string.');
+    return this.#dbName;
+  }
+
+  /**
+   * Returns the active IndexedDB database instance.
+   *
+   * @returns {IDBDatabase} The open database instance.
+   * @throws {Error} If the database has not been initialized.
+   */
+  getDb() {
+    if (this.#db === null)
+      throw new Error('Database has not been initialized. Call the initIndexDb() method first.');
+    return this.#db;
+  }
+
+  /**
+   * Initializes the IndexedDB database and restores previously saved state.
+   *
+   * @param {string} [dbName='TinyOlmInstance'] - The name of the IndexedDB database.
+   * @returns {Promise<IDBDatabase>} Resolves when the database is ready.
+   * @throws {Error} If not in a browser or if the database is already initialized.
+   */
+  async initIndexDb(dbName = 'TinyOlmInstance') {
+    // Check all
+    await tinyOlm.fetchOlm();
+    this.validateIsBrowser();
+    if (typeof dbName !== 'string') throw new Error('Invalid database name: expected a string.');
+    if (this.#db !== null) throw new Error('Database is already open or initialized.');
+    this.#dbName = dbName;
+
+    // Get db
+    const db = await new Promise((resolve, reject) => {
+      const dbName = this.getDbName();
+      const req = indexedDB.open(dbName, this.#dbVersion);
+      req.onupgradeneeded = () => {
+        // Start database
+        const db = req.result;
+        db.createObjectStore('account');
+        db.createObjectStore('sessions');
+        db.createObjectStore('groupSessions');
+        db.createObjectStore('groupInboundSessions');
+      };
+      req.onsuccess = () => {
+        this.#emit(TinyOlmInstance.Events.SetPassword, this.password);
+        this.#emit(TinyOlmInstance.Events.SetUserId, this.userId);
+        this.#emit(TinyOlmInstance.Events.SetDeviceId, this.deviceId);
+        resolve(req.result);
+      };
+      req.onerror = () => reject(req.error);
+    });
+
+    // Load and restore account
+    const accountPickle = await this.#idbGet('account', 'main');
+    if (accountPickle) this.importAccount(accountPickle);
+
+    // Load and restore sessions
+    const sessionPickles = await this.#idbGetAll('sessions');
+    for (const [userId, pickle] of Object.entries(sessionPickles))
+      this.importSession(userId, pickle);
+
+    const groupSessionPickles = await this.#idbGetAll('groupSessions');
+    for (const [roomId, pickle] of Object.entries(groupSessionPickles))
+      this.importGroupSession(roomId, pickle);
+
+    const groupInboundPickles = await this.#idbGetAll('groupInboundSessions');
+    for (const [roomId, pickle] of Object.entries(groupInboundPickles))
+      this.importInboundGroupSession(roomId, pickle);
+
+    // Hook updates
+    this.#watchForPickleChanges();
+
+    // Db value is ready now
+    this.#db = db;
+    return db;
+  }
+
+  async _testIndexDb() {
+    const accountPickle = await this.#idbGet('account', 'main');
+    console.log(accountPickle);
+
+    const sessionPickles = await this.#idbGetAll('sessions');
+    console.log(sessionPickles);
+
+    const groupSessionPickles = await this.#idbGetAll('groupSessions');
+    console.log(groupSessionPickles);
+
+    const groupInboundPickles = await this.#idbGetAll('groupInboundSessions');
+    console.log(groupInboundPickles);
+  }
+
+  /**
    * Validates that a given userId follows the Matrix user ID format.
    *
    * A valid Matrix user ID must start with '@', contain at least one character,
@@ -100,6 +489,7 @@ class TinyOlmInstance {
     if (typeof newPassword !== 'string')
       throw new Error('The value provided to password must be a string.');
     this.password = newPassword;
+    this.#emit(TinyOlmInstance.Events.SetPassword, newPassword);
   }
 
   /**
@@ -123,6 +513,7 @@ class TinyOlmInstance {
     if (typeof newUserId !== 'string')
       throw new Error('The value provided to userId must be a string.');
     this.userId = newUserId;
+    this.#emit(TinyOlmInstance.Events.SetUserId, newUserId);
   }
 
   /**
@@ -146,6 +537,7 @@ class TinyOlmInstance {
     if (typeof newDeviceId !== 'string')
       throw new Error('The value provided to deviceId must be a string.');
     this.deviceId = newDeviceId;
+    this.#emit(TinyOlmInstance.Events.SetDeviceId, newDeviceId);
   }
 
   /**
@@ -256,6 +648,7 @@ class TinyOlmInstance {
     const account = new Olm.Account();
     account.unpickle(password, pickled);
     this.account = account;
+    this.#emit(TinyOlmInstance.Events.ImportAccount, account);
   }
 
   /**
@@ -271,6 +664,7 @@ class TinyOlmInstance {
     const sess = new Olm.Session();
     sess.unpickle(password, pickled);
     this.sessions.set(key, sess);
+    this.#emit(TinyOlmInstance.Events.ImportSession, sess);
   }
 
   /**
@@ -286,6 +680,7 @@ class TinyOlmInstance {
     const group = new Olm.OutboundGroupSession();
     group.unpickle(password, pickled);
     this.groupSessions.set(key, group);
+    this.#emit(TinyOlmInstance.Events.ImportGroupSession, group);
   }
 
   /**
@@ -301,6 +696,7 @@ class TinyOlmInstance {
     const inbound = new Olm.InboundGroupSession();
     inbound.unpickle(password, pickled);
     this.groupInboundSessions.set(key, inbound);
+    this.#emit(TinyOlmInstance.Events.ImportInboundGroupSession, inbound);
   }
 
   /**
@@ -357,6 +753,7 @@ class TinyOlmInstance {
   removeSession(userId) {
     const session = this.getSession(userId);
     session.free();
+    this.#emit(TinyOlmInstance.Events.RemoveSession, session);
     return this.sessions.delete(userId);
   }
 
@@ -366,7 +763,9 @@ class TinyOlmInstance {
    * @returns {void}
    */
   clearSessions() {
+    for (const session of this.sessions.values()) session.free();
     this.sessions.clear();
+    this.#emit(TinyOlmInstance.Events.ClearSessions);
   }
 
   /**
@@ -378,6 +777,7 @@ class TinyOlmInstance {
     const Olm = await tinyOlm.fetchOlm();
     this.account = new Olm.Account();
     this.account.create();
+    this.#emit(TinyOlmInstance.Events.CreateAccount, this.account);
   }
 
   /**
@@ -400,6 +800,7 @@ class TinyOlmInstance {
     const outboundSession = new Olm.OutboundGroupSession();
     outboundSession.create();
     this.groupSessions.set(roomId, outboundSession);
+    this.#emit(TinyOlmInstance.Events.CreateGroupSession, outboundSession);
     return outboundSession;
   }
 
@@ -427,6 +828,7 @@ class TinyOlmInstance {
     const inboundSession = new Olm.InboundGroupSession();
     inboundSession.create(sessionKey);
     this.groupInboundSessions.set(this.#getGroupSessionId(roomId, userId), inboundSession);
+    this.#emit(TinyOlmInstance.Events.ImportGroupSessionId, inboundSession);
   }
 
   /**
@@ -457,7 +859,19 @@ class TinyOlmInstance {
   removeGroupSession(roomId) {
     const session = this.getGroupSession(roomId);
     session.free();
+    this.#emit(TinyOlmInstance.Events.RemoveGroupSession, session);
     return this.groupSessions.delete(roomId);
+  }
+
+  /**
+   * Clears all group sessions.
+   *
+   * @returns {void}
+   */
+  clearGroupSessions() {
+    for (const groupSession of this.groupSessions.values()) groupSession.free();
+    this.groupSessions.clear();
+    this.#emit(TinyOlmInstance.Events.ClearGroupSessions);
   }
 
   /**
@@ -493,7 +907,19 @@ class TinyOlmInstance {
     const sessionId = this.#getGroupSessionId(roomId, userId);
     const session = this.getInboundGroupSession(sessionId);
     session.free();
+    this.#emit(TinyOlmInstance.Events.RemoveInboundGroupSession, session);
     return this.groupInboundSessions.delete(sessionId);
+  }
+
+  /**
+   * Clears all inbound group sessions.
+   *
+   * @returns {void}
+   */
+  clearInboundGroupSessions() {
+    for (const inbound of this.groupInboundSessions.values()) inbound.free();
+    this.groupInboundSessions.clear();
+    this.#emit(TinyOlmInstance.Events.ClearInboundGroupSessions);
   }
 
   /**
@@ -639,6 +1065,7 @@ class TinyOlmInstance {
     }
     /** @type {Record<string, { key: string, signatures: Record<string, Record<string, string>> }>} */
     this.signedOneTimeKeys = signedKeys;
+    this.#emit(TinyOlmInstance.Events.SignOneTimeKeys, signedKeys);
   }
 
   /**
@@ -661,6 +1088,7 @@ class TinyOlmInstance {
   markKeysAsPublished() {
     if (!this.account) throw new Error('Account is not initialized.');
     this.account.mark_keys_as_published();
+    this.#emit(TinyOlmInstance.Events.MarkKeysAsPublished);
   }
 
   /**
@@ -679,6 +1107,7 @@ class TinyOlmInstance {
     const session = new Olm.Session();
     session.create_outbound(this.account, theirIdentityKey, theirOneTimeKey);
     this.sessions.set(theirUsername, session);
+    this.#emit(TinyOlmInstance.Events.CreateOutboundSession, session);
   }
 
   /**
@@ -697,6 +1126,7 @@ class TinyOlmInstance {
     session.create_inbound_from(this.account, senderIdentityKey, ciphertext);
     this.account.remove_one_time_keys(session);
     this.sessions.set(senderUsername, session);
+    this.#emit(TinyOlmInstance.Events.CreateInboundSession, session);
   }
 
   /**
@@ -766,16 +1196,14 @@ class TinyOlmInstance {
    * @returns {void}
    */
   dispose() {
-    for (const session of this.sessions.values()) session.free();
-    this.sessions.clear();
+    this.clearSessions();
     if (this.account) {
       this.account.free();
       this.account = null;
+      this.#emit(TinyOlmInstance.Events.ResetAccount);
     }
-    for (const inbound of this.groupInboundSessions.values()) inbound.free();
-    for (const groupSession of this.groupSessions.values()) groupSession.free();
-    this.groupInboundSessions.clear();
-    this.groupSessions.clear();
+    this.clearGroupSessions();
+    this.clearInboundGroupSessions();
   }
 
   /**
@@ -793,10 +1221,12 @@ class TinyOlmInstance {
    * @returns {Promise<void>}
    */
   async regenerateIdentityKeys() {
-    if (this.account) this.account.free();
     const Olm = await tinyOlm.fetchOlm();
+    if (this.account) this.account.free();
+    this.#emit(TinyOlmInstance.Events.ResetAccount);
     this.account = new Olm.Account();
     this.account.create();
+    this.#emit(TinyOlmInstance.Events.CreateAccount, this.account);
   }
 
   /**

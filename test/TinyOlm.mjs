@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 import FakeMatrixServer from '../dist/TinyOlm/FakeMatrixServer.mjs';
 import { TinyOlmInstance } from '../dist/index.mjs';
 
@@ -53,6 +54,7 @@ async function simulateSingleMatrixCommunication() {
   console.log(header('Initializing Accounts 🚀'));
 
   await alice.init();
+  await alice.initIndexDb();
   await bob.init();
 
   console.log(header('Generating & Uploading Keys 🔑'));
@@ -241,6 +243,9 @@ async function simulateSingleMatrixCommunication() {
     ),
   );
 
+  console.log(divider());
+
+  await alice._testIndexDb();
   console.log(header('Conversation Ended ✅'));
 }
 
