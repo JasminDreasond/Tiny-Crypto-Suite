@@ -6,7 +6,7 @@ import tinyOlm from './Module.mjs';
 import TinyOlmEvents from './Events.mjs';
 
 /**
- * TinyOlm is a lightweight wrapper for handling encryption sessions using the Olm cryptographic library.
+ * TinyOlm instance is a lightweight wrapper for handling encryption sessions using the Olm cryptographic library.
  *
  * This class is **not available for production mode**.
  *
