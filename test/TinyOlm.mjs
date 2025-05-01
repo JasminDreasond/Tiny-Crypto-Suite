@@ -54,7 +54,7 @@ async function simulateSingleMatrixCommunication() {
   console.log(header('Initializing Accounts 🚀'));
 
   await alice.init();
-  await alice.initIndexDb();
+  await alice.initIndexedDb();
   await bob.init();
 
   console.log(header('Generating & Uploading Keys 🔑'));
@@ -247,7 +247,7 @@ async function simulateSingleMatrixCommunication() {
 
   await new Promise((resolve) =>
     setTimeout(async () => {
-      await alice._testIndexDb();
+      await alice._testIndexedDb();
       resolve();
     }, 200),
   );
@@ -271,7 +271,7 @@ async function simulateGroupMatrixCommunication() {
   console.log(header('Initializing Accounts 🚀'));
 
   await Promise.all([alice.init(), bob.init(), charlie.init(), diana.init()]);
-  await alice.initIndexDb();
+  await alice.initIndexedDb();
 
   console.log(header('Generating & Uploading Keys 🔑'));
 
@@ -434,7 +434,7 @@ async function simulateGroupMatrixCommunication() {
 
   await new Promise((resolve) =>
     setTimeout(async () => {
-      await alice._testIndexDb();
+      await alice._testIndexedDb();
       resolve();
     }, 200),
   );

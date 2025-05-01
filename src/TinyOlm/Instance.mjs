@@ -420,7 +420,7 @@ class TinyOlmInstance {
    */
   getDb() {
     if (this.#db === null)
-      throw new Error('Database has not been initialized. Call the initIndexDb() method first.');
+      throw new Error('Database has not been initialized. Call the initIndexedDb() method first.');
     return this.#db;
   }
 
@@ -431,7 +431,7 @@ class TinyOlmInstance {
    * @returns {Promise<IDBDatabase>} Resolves when the database is ready.
    * @throws {Error} If not in a browser or if the database is already initialized.
    */
-  async initIndexDb(dbName = 'TinyOlmInstance') {
+  async initIndexedDb(dbName = 'TinyOlmInstance') {
     // Check all
     await tinyOlm.fetchOlm();
     this.validateIsBrowser();
@@ -486,7 +486,7 @@ class TinyOlmInstance {
     return db;
   }
 
-  async _testIndexDb() {
+  async _testIndexedDb() {
     const accountPickles = await this.#idbGetAll('account');
     console.log(accountPickles);
 
