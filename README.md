@@ -20,10 +20,11 @@ Built for modern apps that need to juggle certificates, keys, and encrypted data
 
 ## 📁 What's Inside?
 
-This suite is composed of **two powerful and lightweight modules**:
+This suite is composed of **three powerful and lightweight modules**:
 
 1. [`TinyCertCrypto`](#-tinycertcrypto) – Handles **X.509 certificates**, **RSA key pairs**, and **public/private encryption**.
-2. [`TinyCrypto`](#-tinycrypto) – Provides **AES-256-GCM** symmetric encryption and supports **complex JavaScript data types** out-of-the-box.
+2. [`TinyOlm`](./docs/TinyOlm) – Implements **Olm protocol** for **end-to-end encryption**, managing identity keys, sessions, and message exchange securely.
+3. [`TinyCrypto`](#-tinycrypto) – Provides **AES-256-GCM** symmetric encryption and supports **complex JavaScript data types** out-of-the-box.
 
 Together, they form a flexible system for secure communication, configuration handling, and data protection across platforms.
 
