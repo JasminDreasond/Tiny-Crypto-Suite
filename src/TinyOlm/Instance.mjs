@@ -1082,7 +1082,6 @@ class TinyOlmInstance {
   #signOneTimeKeys() {
     if (!this.account) throw new Error('Account is not initialized.');
     const oneTimeKeys = this.getOneTimeKeys();
-    const Olm = tinyOlm.getOlm();
     /** @type {Record<string, { key: string, signatures: Record<string, Record<string, string>> }>} */
     const signedKeys = {};
 

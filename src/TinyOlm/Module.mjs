@@ -9,8 +9,6 @@ class TinyOlmModule {
    * Dynamically imports the `@matrix-org/olm` module and stores it in the instance.
    * Ensures the module is loaded only once (lazy singleton).
    *
-   * This method is private and should not be called directly from outside.
-   *
    * @returns {Promise<Olm>} The loaded `@matrix-org/olm` module.
    */
   async fetchOlm() {

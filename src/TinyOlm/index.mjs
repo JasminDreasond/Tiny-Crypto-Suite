@@ -1,3 +1,4 @@
+import tinyOlm from './Module.mjs';
 import TinyOlmEvents from './Events.mjs';
 import TinyOlmInstance from './Instance.mjs';
 
@@ -12,8 +13,29 @@ import TinyOlmInstance from './Instance.mjs';
  * @class
  */
 class TinyOlm {
+  /** @typedef {import('@matrix-org/olm')} Olm */
   static Instance = TinyOlmInstance;
   static Events = TinyOlmEvents;
+
+  /**
+   * Returns the previously loaded `@matrix-org/olm` instance.
+   * Assumes the module has already been loaded.
+   *
+   * @returns {Olm} The `@matrix-org/olm` module.
+   */
+  static getOlm() {
+    return tinyOlm.getOlm();
+  }
+
+  /**
+   * Dynamically imports the `@matrix-org/olm` module and stores it in the instance.
+   * Ensures the module is loaded only once (lazy singleton).
+   *
+   * @returns {Promise<Olm>} The loaded `@matrix-org/olm` module.
+   */
+  static fetchOlm() {
+    return tinyOlm.fetchOlm();
+  }
 
   /**
    * This constructor is intentionally blocked.
