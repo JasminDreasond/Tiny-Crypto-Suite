@@ -98,7 +98,7 @@ Checks whether there is an active Olm session with a specific user.
 #### 🧑‍💻 Example
 
 ```javascript
-if (tinyOlmInstance.hasSession('@alice:matrix.org')) {
+if (tinyOlmInstance.hasSession('@alice')) {
   console.log('Session with Alice exists!');
 }
 ```
@@ -154,7 +154,7 @@ Creates an outbound Olm session with another user using their identity and one-t
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.createOutboundSession(theirIdentityKey, theirOneTimeKey, '@alice:matrix.org');
+tinyOlmInstance.createOutboundSession(theirIdentityKey, theirOneTimeKey, '@alice');
 ```
 
 ---
@@ -177,7 +177,7 @@ Creates an inbound Olm session based on a received ciphertext and sender's ident
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.createInboundSession(senderIdentityKey, ciphertext, '@bob:matrix.org');
+tinyOlmInstance.createInboundSession(senderIdentityKey, ciphertext, '@bob');
 ```
 
 ---
