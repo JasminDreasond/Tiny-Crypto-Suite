@@ -3,8 +3,25 @@
  * Each key maps to its string identifier.
  */
 class TinyOlmEvents {
+  /**
+   * This class is not meant to be instantiated.
+   *
+   * TinyOlmEvents is a static-only class. All its members should be accessed directly through the class.
+   *
+   * @throws {Error} Always throws an error saying you can't summon it like a tiny pudding.
+   */
+  constructor() {
+    throw new Error(
+      "Oops! TinyOlmEvents isn't something you can summon like a tiny pudding. Just use it statically~ 🍮",
+    );
+  }
+
   /** Emits when a value needs to be stored in the database */
   static DbPut = 'DbPut';
+  /** Emits when a value needs to be deleted in the database */
+  static DbDelete = 'DbDelete';
+  /** Emits when a entire table list needs to be deleted in the database */
+  static DbClear = 'DbClear';
 
   /** Sets the user's password */
   static SetPassword = 'SetPassword';

@@ -245,7 +245,13 @@ async function simulateSingleMatrixCommunication() {
 
   console.log(divider());
 
-  await alice._testIndexDb();
+  await new Promise((resolve) =>
+    setTimeout(async () => {
+      await alice._testIndexDb();
+      resolve();
+    }, 200),
+  );
+
   console.log(header('Conversation Ended ✅'));
 }
 
@@ -265,6 +271,7 @@ async function simulateGroupMatrixCommunication() {
   console.log(header('Initializing Accounts 🚀'));
 
   await Promise.all([alice.init(), bob.init(), charlie.init(), diana.init()]);
+  await alice.initIndexDb();
 
   console.log(header('Generating & Uploading Keys 🔑'));
 
@@ -421,6 +428,15 @@ async function simulateGroupMatrixCommunication() {
       `${dianaTag} ${YELLOW}Encrypted group content${RESET}`,
       JSON.stringify(encryptedDataFromDiana, null, 2),
     ),
+  );
+
+  console.log(divider());
+
+  await new Promise((resolve) =>
+    setTimeout(async () => {
+      await alice._testIndexDb();
+      resolve();
+    }, 200),
   );
 
   console.log(divider());

@@ -210,36 +210,88 @@ class TinyOlmInstance {
   #watchForPickleChanges() {
     this.#dbEvents.setMaxListeners(1000);
 
-    this.#dbEvents.on(TinyOlmEvents.SetPassword, () => {});
-    this.#dbEvents.on(TinyOlmEvents.SetUserId, () => {});
-    this.#dbEvents.on(TinyOlmEvents.SetDeviceId, () => {});
+    const saveAccount = () => {
+      if (this.account) this.#idbPut('account', 'main', this.account.pickle(this.password));
+    };
 
-    this.#dbEvents.on(TinyOlmEvents.ImportAccount, () => {});
-    this.#dbEvents.on(TinyOlmEvents.ImportSession, () => {});
-    this.#dbEvents.on(TinyOlmEvents.ImportGroupSession, () => {});
-    this.#dbEvents.on(TinyOlmEvents.ImportInboundGroupSession, () => {});
-    this.#dbEvents.on(TinyOlmEvents.ImportGroupSessionId, () => {});
+    this.#dbEvents.on(TinyOlmEvents.SetPassword, () =>
+      this.#idbPut('account', 'password', this.password),
+    );
+    this.#dbEvents.on(TinyOlmEvents.SetUserId, () =>
+      this.#idbPut('account', 'userId', this.userId),
+    );
+    this.#dbEvents.on(TinyOlmEvents.SetDeviceId, () =>
+      this.#idbPut('account', 'deviceId', this.deviceId),
+    );
 
-    this.#dbEvents.on(TinyOlmEvents.RemoveSession, () => {});
-    this.#dbEvents.on(TinyOlmEvents.RemoveGroupSession, () => {});
-    this.#dbEvents.on(TinyOlmEvents.RemoveInboundGroupSession, () => {});
+    this.#idbPut('account', 'password', this.password);
+    this.#idbPut('account', 'userId', this.userId);
+    this.#idbPut('account', 'deviceId', this.deviceId);
 
-    this.#dbEvents.on(TinyOlmEvents.ClearSessions, () => {});
-    this.#dbEvents.on(TinyOlmEvents.ClearInboundGroupSessions, () => {});
-    this.#dbEvents.on(TinyOlmEvents.ClearGroupSessions, () => {});
+    this.#dbEvents.on(TinyOlmEvents.SignOneTimeKeys, () => saveAccount());
+    this.#dbEvents.on(TinyOlmEvents.MarkKeysAsPublished, () => saveAccount());
 
-    this.#dbEvents.on(TinyOlmEvents.CreateAccount, () => {});
-    this.#dbEvents.on(TinyOlmEvents.CreateGroupSession, () => {});
-    this.#dbEvents.on(TinyOlmEvents.CreateInboundSession, () => {});
-    this.#dbEvents.on(TinyOlmEvents.CreateOutboundSession, () => {});
+    this.#dbEvents.on(
+      TinyOlmEvents.ImportAccount,
+      /** @param {Olm.Account} account */
+      (account) => this.#idbPut('account', 'main', account.pickle(this.password)),
+    );
+    this.#dbEvents.on(
+      TinyOlmEvents.ImportSession,
+      /** @param {Olm.Session} session */
+      (key, session) => this.#idbPut('sessions', key, session.pickle(this.password)),
+    );
+    this.#dbEvents.on(
+      TinyOlmEvents.ImportGroupSession,
+      /** @param {Olm.OutboundGroupSession} session */
+      (key, session) => this.#idbPut('groupSessions', key, session.pickle(this.password)),
+    );
+    this.#dbEvents.on(
+      TinyOlmEvents.ImportInboundGroupSession,
+      /** @param {Olm.InboundGroupSession} session */
+      (key, session) => this.#idbPut('groupInboundSessions', key, session.pickle(this.password)),
+    );
+    this.#dbEvents.on(
+      TinyOlmEvents.ImportGroupSessionId,
+      /** @param {Olm.InboundGroupSession} session */
+      (key, session) => this.#idbPut('groupInboundSessions', key, session.pickle(this.password)),
+    );
 
-    this.#dbEvents.on(TinyOlmEvents.SignOneTimeKeys, () => {});
-    this.#dbEvents.on(TinyOlmEvents.MarkKeysAsPublished, () => {});
+    this.#dbEvents.on(TinyOlmEvents.RemoveSession, (key) => this.#idbDelete('sessions', key));
+    this.#dbEvents.on(TinyOlmEvents.RemoveGroupSession, (key) =>
+      this.#idbDelete('groupSessions', key),
+    );
+    this.#dbEvents.on(TinyOlmEvents.RemoveInboundGroupSession, (key) =>
+      this.#idbDelete('groupInboundSessions', key),
+    );
+    this.#dbEvents.on(TinyOlmEvents.ResetAccount, () => this.#idbDelete('account', 'main'));
 
-    this.#dbEvents.on(TinyOlmEvents.ResetAccount, () => {});
+    this.#dbEvents.on(TinyOlmEvents.ClearSessions, () => this.#idbClear('sessions'));
+    this.#dbEvents.on(TinyOlmEvents.ClearInboundGroupSessions, () =>
+      this.#idbClear('groupInboundSessions'),
+    );
+    this.#dbEvents.on(TinyOlmEvents.ClearGroupSessions, () => this.#idbClear('groupSessions'));
 
-    // this.#idbPut('account', 'main', this.getAccountPickle());
-    // this.#idbPut('sessions', userId, this.getSessionPickle(userId));
+    this.#dbEvents.on(
+      TinyOlmEvents.CreateAccount,
+      /** @param {Olm.Account} account */ (account) =>
+        this.#idbPut('account', 'main', account.pickle(this.password)),
+    );
+    this.#dbEvents.on(
+      TinyOlmEvents.CreateGroupSession,
+      /** @param {Olm.OutboundGroupSession} session */
+      (key, session) => this.#idbPut('groupSessions', key, session.pickle(this.password)),
+    );
+    this.#dbEvents.on(
+      TinyOlmEvents.CreateInboundSession,
+      /** @param {Olm.Session} session */
+      (key, session) => this.#idbPut('sessions', key, session.pickle(this.password)),
+    );
+    this.#dbEvents.on(
+      TinyOlmEvents.CreateOutboundSession,
+      /** @param {Olm.Session} session */
+      (key, session) => this.#idbPut('sessions', key, session.pickle(this.password)),
+    );
   }
 
   /**
@@ -300,6 +352,47 @@ class TinyOlmInstance {
       return new Promise((resolve, reject) => {
         req.onsuccess = () => {
           this.#events.emit(TinyOlmEvents.DbPut, store, key, value);
+          resolve(req.result);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    });
+  }
+
+  /**
+   * Deletes a value from the specified IndexedDB store.
+   *
+   * @param {string} store - The store name.
+   * @param {IDBValidKey} key - The key to delete.
+   * @returns {Promise<void>}
+   */
+  #idbDelete(store, key) {
+    return this.#queue.enqueue(() => {
+      const tx = this.getDb().transaction([store], 'readwrite');
+      const req = tx.objectStore(store).delete(key);
+      return new Promise((resolve, reject) => {
+        req.onsuccess = () => {
+          this.#events.emit(TinyOlmEvents.DbDelete, store, key);
+          resolve(req.result);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    });
+  }
+
+  /**
+   * Clears all values from the specified IndexedDB store.
+   *
+   * @param {string} store - The store name.
+   * @returns {Promise<void>}
+   */
+  #idbClear(store) {
+    return this.#queue.enqueue(() => {
+      const tx = this.getDb().transaction([store], 'readwrite');
+      const req = tx.objectStore(store).clear();
+      return new Promise((resolve, reject) => {
+        req.onsuccess = () => {
+          this.#events.emit(TinyOlmEvents.DbClear, store);
           resolve(req.result);
         };
         req.onerror = () => reject(req.error);
@@ -394,8 +487,8 @@ class TinyOlmInstance {
   }
 
   async _testIndexDb() {
-    const accountPickle = await this.#idbGet('account', 'main');
-    console.log(accountPickle);
+    const accountPickles = await this.#idbGetAll('account');
+    console.log(accountPickles);
 
     const sessionPickles = await this.#idbGetAll('sessions');
     console.log(sessionPickles);
@@ -606,7 +699,7 @@ class TinyOlmInstance {
     const sess = new Olm.Session();
     sess.unpickle(password, pickled);
     this.sessions.set(key, sess);
-    this.#emit(TinyOlmEvents.ImportSession, sess);
+    this.#emit(TinyOlmEvents.ImportSession, key, sess);
   }
 
   /**
@@ -622,7 +715,7 @@ class TinyOlmInstance {
     const group = new Olm.OutboundGroupSession();
     group.unpickle(password, pickled);
     this.groupSessions.set(key, group);
-    this.#emit(TinyOlmEvents.ImportGroupSession, group);
+    this.#emit(TinyOlmEvents.ImportGroupSession, key, group);
   }
 
   /**
@@ -638,7 +731,7 @@ class TinyOlmInstance {
     const inbound = new Olm.InboundGroupSession();
     inbound.unpickle(password, pickled);
     this.groupInboundSessions.set(key, inbound);
-    this.#emit(TinyOlmEvents.ImportInboundGroupSession, inbound);
+    this.#emit(TinyOlmEvents.ImportInboundGroupSession, key, inbound);
   }
 
   /**
@@ -695,7 +788,7 @@ class TinyOlmInstance {
   removeSession(userId) {
     const session = this.getSession(userId);
     session.free();
-    this.#emit(TinyOlmEvents.RemoveSession, session);
+    this.#emit(TinyOlmEvents.RemoveSession, userId, session);
     return this.sessions.delete(userId);
   }
 
@@ -742,7 +835,7 @@ class TinyOlmInstance {
     const outboundSession = new Olm.OutboundGroupSession();
     outboundSession.create();
     this.groupSessions.set(roomId, outboundSession);
-    this.#emit(TinyOlmEvents.CreateGroupSession, outboundSession);
+    this.#emit(TinyOlmEvents.CreateGroupSession, roomId, outboundSession);
     return outboundSession;
   }
 
@@ -769,8 +862,9 @@ class TinyOlmInstance {
     const Olm = tinyOlm.getOlm();
     const inboundSession = new Olm.InboundGroupSession();
     inboundSession.create(sessionKey);
-    this.groupInboundSessions.set(this.#getGroupSessionId(roomId, userId), inboundSession);
-    this.#emit(TinyOlmEvents.ImportGroupSessionId, inboundSession);
+    const sessionId = this.#getGroupSessionId(roomId, userId);
+    this.groupInboundSessions.set(sessionId, inboundSession);
+    this.#emit(TinyOlmEvents.ImportGroupSessionId, sessionId, inboundSession);
   }
 
   /**
@@ -801,7 +895,7 @@ class TinyOlmInstance {
   removeGroupSession(roomId) {
     const session = this.getGroupSession(roomId);
     session.free();
-    this.#emit(TinyOlmEvents.RemoveGroupSession, session);
+    this.#emit(TinyOlmEvents.RemoveGroupSession, roomId, session);
     return this.groupSessions.delete(roomId);
   }
 
@@ -849,7 +943,7 @@ class TinyOlmInstance {
     const sessionId = this.#getGroupSessionId(roomId, userId);
     const session = this.getInboundGroupSession(sessionId);
     session.free();
-    this.#emit(TinyOlmEvents.RemoveInboundGroupSession, session);
+    this.#emit(TinyOlmEvents.RemoveInboundGroupSession, sessionId, session);
     return this.groupInboundSessions.delete(sessionId);
   }
 
@@ -1049,7 +1143,7 @@ class TinyOlmInstance {
     const session = new Olm.Session();
     session.create_outbound(this.account, theirIdentityKey, theirOneTimeKey);
     this.sessions.set(theirUsername, session);
-    this.#emit(TinyOlmEvents.CreateOutboundSession, session);
+    this.#emit(TinyOlmEvents.CreateOutboundSession, theirUsername, session);
   }
 
   /**
@@ -1068,7 +1162,7 @@ class TinyOlmInstance {
     session.create_inbound_from(this.account, senderIdentityKey, ciphertext);
     this.account.remove_one_time_keys(session);
     this.sessions.set(senderUsername, session);
-    this.#emit(TinyOlmEvents.CreateInboundSession, session);
+    this.#emit(TinyOlmEvents.CreateInboundSession, senderUsername, session);
   }
 
   /**
