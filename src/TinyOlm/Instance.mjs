@@ -501,7 +501,7 @@ class TinyOlmInstance {
   }
 
   /**
-   * Validates that a given userId follows the Matrix user ID format.
+   * Validates that a given userId follows the user ID format.
    *
    * A valid Matrix user ID must start with '@', contain at least one character,
    * then a ':', followed by at least one character (e.g., "@user:domain.com").
