@@ -54,6 +54,29 @@ class TinyOlmEvents {
 
   /** Resets the current cryptographic account (destroys keys and sessions) */
   static ResetAccount = 'ResetAccount';
+
+  /**
+   * @returns {string[]}
+   */
+  static get all() {
+    const items = [];
+    for (const key of Object.getOwnPropertyNames(this)) {
+      // Skip getters or non-string static properties
+      if (key !== 'name') {
+        const descriptor = Object.getOwnPropertyDescriptor(this, key);
+        if (descriptor && typeof descriptor.value === 'string') items.push(descriptor.value);
+      }
+    }
+    return items;
+  }
+
+  /**
+   * @param {string} event
+   * @returns {boolean}
+   */
+  static isValid(event) {
+    return this.all.includes(event);
+  }
 }
 
 export default TinyOlmEvents;
