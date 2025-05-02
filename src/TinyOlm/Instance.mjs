@@ -673,23 +673,27 @@ class TinyOlmInstance {
   /**
    * @param {ExportedOlmInstance} data Returned object of exportInstance
    * @param {string} [password] The password used to pickle
-   * @returns {Promise<void>}
+   * @returns {Promise<void[]>}
    */
   async importInstance(data, password = '') {
     await tinyOlm.fetchOlm();
-    if (data.account) this.importAccount(data.account, password);
+    const promises = [];
+
+    if (data.account) promises.push(this.importAccount(data.account, password));
 
     if (data.sessions)
       for (const [key, pickled] of Object.entries(data.sessions))
-        this.importSession(key, pickled, password);
+        promises.push(this.importSession(key, pickled, password));
 
     if (data.groupSessions)
       for (const [key, pickled] of Object.entries(data.groupSessions))
-        this.importGroupSession(key, pickled, password);
+        promises.push(this.importGroupSession(key, pickled, password));
 
     if (data.groupInboundSessions)
       for (const [key, pickled] of Object.entries(data.groupInboundSessions))
-        this.importInboundGroupSession(key, pickled, password);
+        promises.push(this.importInboundGroupSession(key, pickled, password));
+
+    return Promise.all(promises);
   }
 
   /**
