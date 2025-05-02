@@ -917,97 +917,6 @@ class TinyOlmInstance {
   }
 
   /**
-   * Encrypts a plaintext message for a specific room using the outbound group session.
-   * @param {string} roomId
-   * @param {string} plaintext
-   * @returns {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }}
-   * @throws {Error} If no outbound session exists for the given room.
-   */
-  encryptGroupMessage(roomId, plaintext) {
-    const session = this.groupSessions.get(roomId);
-    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
-
-    const ciphertext = session.encrypt(plaintext);
-    return {
-      body: ciphertext,
-      session_id: session.session_id(),
-      message_index: session.message_index(),
-    };
-  }
-
-  /**
-   * Decrypts an encrypted group message using the inbound group session.
-   * @param {string} roomId
-   * @param {string} userId
-   * @param {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }} encryptedMessage
-   * @returns {{ message_index: number; plaintext: string; }}
-   * @throws {Error} If no inbound session exists for the given room and userId.
-   */
-  decryptGroupMessage(roomId, userId, encryptedMessage) {
-    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId));
-    if (!session)
-      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
-    return session.decrypt(encryptedMessage.body);
-  }
-
-  /**
-   * Encrypts a content for a specific room using the outbound group session.
-   * @param {string} roomId
-   * @param {*} data
-   * @returns {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }}
-   * @throws {Error} If no outbound session exists for the given room.
-   */
-  encryptGroupContent(roomId, data) {
-    const session = this.groupSessions.get(roomId);
-    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
-
-    const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
-    const ciphertext = session.encrypt(plainText);
-    return {
-      body: ciphertext,
-      session_id: session.session_id(),
-      message_index: session.message_index(),
-    };
-  }
-
-  /**
-   * Decrypts an encrypted content using the inbound group session.
-   * @param {string} roomId
-   * @param {string} userId
-   * @param {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }} encryptedMessage
-   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
-   * @returns {{ message_index: number; content: string; }}
-   * @throws {Error} If no inbound session exists for the given room and userId.
-   */
-  decryptGroupContent(roomId, userId, encryptedMessage, expectedType) {
-    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId));
-    if (!session)
-      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
-    const result = session.decrypt(encryptedMessage.body);
-
-    const { value } = this.isDeep
-      ? this.#parser.deserializeDeep(result.plaintext, expectedType)
-      : this.#parser.deserialize(result.plaintext, expectedType);
-    return { message_index: result.message_index, content: value };
-  }
-
-  /**
    * Retrieves the identity keys (curve25519 and ed25519) for the account.
    *
    * @returns {{curve25519: Record<string, string>, ed25519: string}}
@@ -1261,6 +1170,34 @@ class TinyOlmInstance {
   }
 
   /**
+   * @param {Olm.Session|undefined} session
+   * @param {string} toUsername
+   * @param {string} plaintext
+   * @returns {EncryptedMessage}
+   * @throws {Error}
+   */
+  #encryptMessage(session, toUsername, plaintext) {
+    if (!session) throw new Error(`No session found with ${toUsername}`);
+    return session.encrypt(plaintext);
+  }
+
+  /**
+   * @param {Olm.Session|undefined} session
+   * @param {string} fromUsername
+   * @param {number} messageType
+   * @param {string} ciphertext
+   * @returns {string}
+   * @throws {Error}
+   */
+  #decryptMessage(session, fromUsername, messageType, ciphertext) {
+    if (!session) throw new Error(`No session found with ${fromUsername}`);
+    const plaintext = session.decrypt(messageType, ciphertext);
+    // After decrypting, consider the session updated (ratcheted)
+    session.has_received_message();
+    return plaintext;
+  }
+
+  /**
    * Encrypts a plaintext message to a specified user.
    *
    * @param {string} toUsername - The userId of the recipient.
@@ -1269,9 +1206,7 @@ class TinyOlmInstance {
    * @throws {Error} Throws an error if no session exists with the given userId.
    */
   encryptMessage(toUsername, plaintext) {
-    const session = this.sessions.get(toUsername);
-    if (!session) throw new Error(`No session found with ${toUsername}`);
-    return session.encrypt(plaintext);
+    return this.#encryptMessage(this.sessions.get(toUsername), toUsername, plaintext);
   }
 
   /**
@@ -1284,12 +1219,12 @@ class TinyOlmInstance {
    * @throws {Error} Throws an error if no session exists with the given userId.
    */
   decryptMessage(fromUsername, messageType, ciphertext) {
-    const session = this.sessions.get(fromUsername);
-    if (!session) throw new Error(`No session found with ${fromUsername}`);
-    const plaintext = session.decrypt(messageType, ciphertext);
-    // After decrypting, consider the session updated (ratcheted)
-    session.has_received_message();
-    return plaintext;
+    return this.#decryptMessage(
+      this.sessions.get(fromUsername),
+      fromUsername,
+      messageType,
+      ciphertext,
+    );
   }
 
   /**
@@ -1321,6 +1256,131 @@ class TinyOlmInstance {
       ? this.#parser.deserializeDeep(decrypted, expectedType)
       : this.#parser.deserialize(decrypted, expectedType);
     return value;
+  }
+
+  /**
+   * @param {Olm.OutboundGroupSession|undefined} session
+   * @param {string} roomId
+   * @param {string} plaintext
+   * @returns {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }}
+   * @throws {Error}
+   */
+  #encryptGroupMessage(session, roomId, plaintext) {
+    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
+
+    const ciphertext = session.encrypt(plaintext);
+    return {
+      body: ciphertext,
+      session_id: session.session_id(),
+      message_index: session.message_index(),
+    };
+  }
+
+  /**
+   * @param {Olm.InboundGroupSession|undefined} session
+   * @param {string} roomId
+   * @param {string} userId
+   * @param {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }} encryptedMessage
+   * @returns {{ message_index: number; plaintext: string; }}
+   * @throws {Error}
+   */
+  #decryptGroupMessage(session, roomId, userId, encryptedMessage) {
+    if (!session)
+      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
+    return session.decrypt(encryptedMessage.body);
+  }
+
+  /**
+   * Encrypts a plaintext message for a specific room using the outbound group session.
+   * @param {string} roomId
+   * @param {string} plaintext
+   * @returns {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  encryptGroupMessage(roomId, plaintext) {
+    return this.#encryptGroupMessage(this.groupSessions.get(roomId), roomId, plaintext);
+  }
+
+  /**
+   * Decrypts an encrypted group message using the inbound group session.
+   * @param {string} roomId
+   * @param {string} userId
+   * @param {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }} encryptedMessage
+   * @returns {{ message_index: number; plaintext: string; }}
+   * @throws {Error} If no inbound session exists for the given room and userId.
+   */
+  decryptGroupMessage(roomId, userId, encryptedMessage) {
+    return this.#decryptGroupMessage(
+      this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId)),
+      roomId,
+      userId,
+      encryptedMessage,
+    );
+  }
+
+  /**
+   * Encrypts a content for a specific room using the outbound group session.
+   * @param {string} roomId
+   * @param {*} data
+   * @returns {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  encryptGroupContent(roomId, data) {
+    const session = this.groupSessions.get(roomId);
+    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
+
+    const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
+    const ciphertext = session.encrypt(plainText);
+    return {
+      body: ciphertext,
+      session_id: session.session_id(),
+      message_index: session.message_index(),
+    };
+  }
+
+  /**
+   * Decrypts an encrypted content using the inbound group session.
+   * @param {string} roomId
+   * @param {string} userId
+   * @param {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }} encryptedMessage
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {{ message_index: number; content: string; }}
+   * @throws {Error} If no inbound session exists for the given room and userId.
+   */
+  decryptGroupContent(roomId, userId, encryptedMessage, expectedType) {
+    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId));
+    if (!session)
+      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
+    const result = session.decrypt(encryptedMessage.body);
+
+    const { value } = this.isDeep
+      ? this.#parser.deserializeDeep(result.plaintext, expectedType)
+      : this.#parser.deserialize(result.plaintext, expectedType);
+    return { message_index: result.message_index, content: value };
   }
 }
 
