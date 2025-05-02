@@ -1,3 +1,27 @@
+### 📥 `importGroupSession(key, pickled, password?)`
+
+Imports and restores an **outbound group Olm session** from a pickled string and registers it with the instance.
+
+#### 🔁 Returns
+- **Promise<void>**
+
+#### 🧼 Behavior
+- Creates a new `Olm.OutboundGroupSession` and unpickles it using the `password`.
+- Stores the session in `this.groupSessions` under the specified `key`.
+- Persists the session in IndexedDB under `groupSessions`.
+- Emits `TinyOlmEvents.ImportGroupSession`.
+
+#### 📌 Note
+Used for resuming group encryption sessions, typically keyed by `roomId`.
+
+#### 🧑‍💻 Example
+
+```javascript
+await tinyOlmInstance.importGroupSession(roomId, pickledGroupSession);
+```
+
+---
+
 ### 🌐 `exportGroupSession(roomId, password = this.password)`
 
 Exports an **outbound group session** for a specific room.
@@ -43,7 +67,7 @@ Creates a new outbound group session for a specific room.
 
 ```javascript
 const roomId = 'room123';
-const session = tinyOlmInstance.createGroupSession(roomId);
+const session = await tinyOlmInstance.createGroupSession(roomId);
 console.log(session); // Olm.OutboundGroupSession
 ```
 
@@ -122,7 +146,7 @@ Removes a specific outbound group session by room ID.
 #### 🧑‍💻 Example
 
 ```javascript
-const success = tinyOlmInstance.removeGroupSession('room123');
+const success = await tinyOlmInstance.removeGroupSession('room123');
 console.log(success); // true if removed
 ```
 
@@ -138,7 +162,7 @@ Clears all group sessions.
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.clearGroupSessions();
+await tinyOlmInstance.clearGroupSessions();
 console.log('All group sessions cleared.');
 ```
 

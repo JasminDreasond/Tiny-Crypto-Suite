@@ -222,8 +222,15 @@ Generates a specified number of one-time keys for the account and signs them.
 #### 💡 Parameters
 - **number** *(number, optional)*: Number of one-time keys to generate. Defaults to 10 if not provided.
 
-#### 🔁 Returns
-- **void**
+#### 💡 Returns
+- **SignedKeyMap** *(Record<string, object>)*: A map where each key is typically a key ID or algorithm identifier, and the value has the following structure:
+  - `key` *(string)*: The actual public key (e.g., Curve25519).
+  - `signatures` *(Record<string, Record<string, string>>)*: A nested object containing signatures, structured as:
+    - First key: user ID
+    - Second key: device ID
+    - Value: signature string
+
+---
 
 #### 🛑 Throws
 - **Error**: If the account is not initialized.
@@ -231,7 +238,7 @@ Generates a specified number of one-time keys for the account and signs them.
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.generateOneTimeKeys(5);
+await tinyOlmInstance.generateOneTimeKeys(5);
 // Now the account has 5 new signed one-time keys.
 ```
 
@@ -270,7 +277,7 @@ Marks the current one-time keys as published, so they won't be reused.
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.markKeysAsPublished();
+await tinyOlmInstance.markKeysAsPublished();
 ```
 
 ---
@@ -326,7 +333,7 @@ After calling this method, you **must**:
 ```javascript
 await tinyOlmInstance.regenerateIdentityKeys();
 await tinyOlmInstance.generateOneTimeKeys();
-tinyOlmInstance.markKeysAsPublished();
+await tinyOlmInstance.markKeysAsPublished();
 ```
 
 ---

@@ -56,19 +56,20 @@ async function simulateSingleMatrixCommunication() {
   await alice.init();
   await alice.initIndexedDb();
   await bob.init();
+  await bob.initIndexedDb();
 
   console.log(header('Generating & Uploading Keys 🔑'));
 
-  alice.generateOneTimeKeys(5);
-  bob.generateOneTimeKeys(5);
+  await alice.generateOneTimeKeys(5);
+  await bob.generateOneTimeKeys(5);
 
   server.uploadIdentityKeys('alice', alice.getIdentityKeys());
   server.uploadOneTimeKeys('alice', alice.signedOneTimeKeys);
   server.uploadIdentityKeys('bob', bob.getIdentityKeys());
   server.uploadOneTimeKeys('bob', bob.signedOneTimeKeys);
 
-  alice.markKeysAsPublished();
-  bob.markKeysAsPublished();
+  await alice.markKeysAsPublished();
+  await bob.markKeysAsPublished();
 
   console.log(header('Establishing Session 🤝'));
 
@@ -78,7 +79,7 @@ async function simulateSingleMatrixCommunication() {
   if (!bobIdentityKey || !bobOneTimeKey)
     throw new Error('Bob has no available keys for session establishment.');
 
-  alice.createOutboundSession(bobIdentityKey, bobOneTimeKey, 'bob');
+  await alice.createOutboundSession(bobIdentityKey, bobOneTimeKey, 'bob');
 
   console.log(divider());
 
@@ -97,7 +98,7 @@ async function simulateSingleMatrixCommunication() {
 
   // Step 4: Bob creates an inbound session to Alice
   const aliceIdentityKey = server.fetchIdentityKey('alice');
-  bob.createInboundSession(aliceIdentityKey, encryptedForBob1.body, 'alice');
+  await bob.createInboundSession(aliceIdentityKey, encryptedForBob1.body, 'alice');
 
   console.log(header('Testing Export Session 🛡️'));
 
@@ -109,7 +110,7 @@ async function simulateSingleMatrixCommunication() {
 
   console.log(header('Testing Import Session 🛡️'));
 
-  bob.dispose();
+  await bob.dispose();
   await bob.importInstance(bobSession);
 
   console.log(divider());
@@ -272,14 +273,15 @@ async function simulateGroupMatrixCommunication() {
 
   await Promise.all([alice.init(), bob.init(), charlie.init(), diana.init()]);
   await alice.initIndexedDb();
+  await bob.initIndexedDb();
 
   console.log(header('Generating & Uploading Keys 🔑'));
 
   for (const user of users) {
-    user.generateOneTimeKeys(5);
+    await user.generateOneTimeKeys(5);
     server.uploadIdentityKeys(user.userId, user.getIdentityKeys());
     server.uploadOneTimeKeys(user.userId, user.signedOneTimeKeys);
-    user.markKeysAsPublished();
+    await user.markKeysAsPublished();
   }
 
   console.log(header('Creating and Sharing Group Session 🛡️'));
@@ -287,12 +289,12 @@ async function simulateGroupMatrixCommunication() {
   // Creates a group session for "room-1"
   for (const username in usersData) {
     const user = usersData[username];
-    user.createGroupSession('room-1');
+    await user.createGroupSession('room-1');
     const sessionKey = user.exportGroupSessionId('room-1');
 
     // User shares the session key with everyone
     for (const user2 of users) {
-      user2.importGroupSessionId('room-1', username, sessionKey);
+      await user2.importGroupSessionId('room-1', username, sessionKey);
     }
   }
 
@@ -308,7 +310,7 @@ async function simulateGroupMatrixCommunication() {
 
   console.log(header('Testing Import Session 🛡️'));
 
-  bob.dispose();
+  await bob.dispose();
   await bob.importInstance(bobSession);
 
   console.log(divider());

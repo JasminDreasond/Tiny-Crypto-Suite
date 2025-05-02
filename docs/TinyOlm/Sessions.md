@@ -1,3 +1,27 @@
+### 📥 `importSession(key, pickled, password?)`
+
+Imports and restores a **1:1 Olm session** from a pickled string and stores it in the internal session map.
+
+#### 🔁 Returns
+- **Promise<void>**
+
+#### 🧼 Behavior
+- Creates a new `Olm.Session` and unpickles it using the provided `password`.
+- Saves the session to `this.sessions` using the provided `key`.
+- Persists the session in IndexedDB under `sessions`.
+- Emits `TinyOlmEvents.ImportSession`.
+
+#### 📌 Note
+This is typically used when syncing session state between devices or restoring it after reinitialization.
+
+#### 🧑‍💻 Example
+
+```javascript
+await tinyOlmInstance.importSession(userId, pickledSession);
+```
+
+---
+
 ### 🔄 `getAllSessions()`
 
 Retrieves all active sessions.
@@ -63,7 +87,7 @@ Removes the session for a specific **userId**.
 #### 🧑‍💻 Example
 
 ```javascript
-const wasRemoved = tinyOlmInstance.removeSession('@user:domain.com');
+const wasRemoved = await tinyOlmInstance.removeSession('@user:domain.com');
 console.log(wasRemoved); // true if session was removed
 ```
 
@@ -80,7 +104,7 @@ Clears all active sessions.
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.clearSessions();
+await tinyOlmInstance.clearSessions();
 ```
 
 ---
@@ -154,7 +178,7 @@ Creates an outbound Olm session with another user using their identity and one-t
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.createOutboundSession(theirIdentityKey, theirOneTimeKey, '@alice');
+await tinyOlmInstance.createOutboundSession(theirIdentityKey, theirOneTimeKey, '@alice');
 ```
 
 ---
@@ -177,7 +201,7 @@ Creates an inbound Olm session based on a received ciphertext and sender's ident
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.createInboundSession(senderIdentityKey, ciphertext, '@bob');
+await tinyOlmInstance.createInboundSession(senderIdentityKey, ciphertext, '@bob');
 ```
 
 ---

@@ -12,7 +12,7 @@ class TinyOlmEvents {
    */
   constructor() {
     throw new Error(
-      "Oops! TinyOlmEvents isn't something you can summon like a tiny pudding. Just use it statically~ 🍮",
+      "Oops! TinyOlmEvents isn't something you can summon like a tiny pudding. Just use it statically 🍮 :3",
     );
   }
 

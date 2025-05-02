@@ -171,12 +171,36 @@ const exportedInstance = tinyOlmInstance.exportInstance('mySecurePassword');
 
 ---
 
+### 📦 `importInstance(data, password?)`
+
+Restores a full exported `TinyOlmInstance`, including account, sessions, and group sessions.
+
+#### 🔁 Returns
+- **Promise<void>**
+
+#### 🧼 Behavior
+- Restores the account via `importAccount()`.
+- Iterates over `data.sessions`, calling `importSession()` on each.
+- Iterates over `data.groupSessions`, calling `importGroupSession()` on each.
+- Iterates over `data.groupInboundSessions`, calling `importInboundGroupSession()` on each.
+
+#### 📌 Note
+This is the high-level method used to restore the entire cryptographic state, e.g., after logging in from another device.
+
+#### 🧑‍💻 Example
+
+```javascript
+await tinyOlmInstance.importInstance(exportedData, 'secure-password');
+```
+
+---
+
 ### 🧹 `dispose()`
 
 Disposes the TinyOlmInstance by clearing all Olm sessions (both individual and group) and releasing the account from memory.
 
 #### 🔁 Returns
-- **void**
+- **Promise<void>**
 
 #### 🧼 Behavior
 - Clears all **1:1 Olm sessions** via `clearSessions()`.
@@ -190,5 +214,31 @@ This should be called when the instance is no longer needed, to ensure that memo
 #### 🧑‍💻 Example
 
 ```javascript
-tinyOlmInstance.dispose();
+await tinyOlmInstance.dispose();
+```
+
+---
+
+### 🗄️ `existsDb()`
+
+Checks whether the internal IndexedDB instance has been initialized and is currently available.
+
+#### 🔁 Returns
+- **boolean**: `true` if the database instance exists and is ready for use, otherwise `false`.
+
+#### 🧼 Behavior
+- Verifies if the private `#db` property has been set (i.e., the database has been opened).
+- Returns `true` if an active `IDBDatabase` instance is present.
+
+#### 📌 Note
+This is a lightweight check that does not open or interact with the database—only verifies internal state.
+
+#### 🧑‍💻 Example
+
+```javascript
+if (tinyOlmInstance.existsDb()) {
+  console.log('Database is ready!');
+} else {
+  console.warn('Database is not initialized.');
+}
 ```
