@@ -1198,36 +1198,6 @@ class TinyOlmInstance {
   }
 
   /**
-   * Encrypts a plaintext message to a specified user.
-   *
-   * @param {string} toUsername - The userId of the recipient.
-   * @param {string} plaintext - The plaintext message to encrypt.
-   * @returns {EncryptedMessage} The encrypted message.
-   * @throws {Error} Throws an error if no session exists with the given userId.
-   */
-  encryptMessage(toUsername, plaintext) {
-    return this.#encryptMessage(this.sessions.get(toUsername), toUsername, plaintext);
-  }
-
-  /**
-   * Decrypts a received ciphertext message from a specified user.
-   *
-   * @param {string} fromUsername - The userId of the sender.
-   * @param {number} messageType - The type of the message (0: pre-key, 1: message).
-   * @param {string} ciphertext - The ciphertext to decrypt.
-   * @returns {string} The decrypted plaintext message.
-   * @throws {Error} Throws an error if no session exists with the given userId.
-   */
-  decryptMessage(fromUsername, messageType, ciphertext) {
-    return this.#decryptMessage(
-      this.sessions.get(fromUsername),
-      fromUsername,
-      messageType,
-      ciphertext,
-    );
-  }
-
-  /**
    * @param {*} data
    * @returns {string}
    * @throws {Error}
@@ -1247,33 +1217,6 @@ class TinyOlmInstance {
       ? this.#parser.deserializeDeep(decrypted, expectedType)
       : this.#parser.deserialize(decrypted, expectedType);
     return value;
-  }
-
-  /**
-   * Encrypts a data to a specified user.
-   *
-   * @param {string} toUsername - The userId of the recipient.
-   * @param {*} data - The content to encrypt.
-   * @returns {EncryptedMessage} The encrypted message.
-   * @throws {Error} Throws an error if no session exists with the given userId.
-   */
-  encrypt(toUsername, data) {
-    return this.encryptMessage(toUsername, this.#encrypt(data));
-  }
-
-  /**
-   * Decrypts a received data from a specified user.
-   *
-   * @param {string} fromUsername - The userId of the sender.
-   * @param {number} messageType - The type of the message (0: pre-key, 1: message).
-   * @param {string} plaintext - The decrypted content to decrypt.
-   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
-   * @returns {*} The decrypted plaintext message.
-   * @throws {Error} Throws an error if no session exists with the given userId.
-   */
-  decrypt(fromUsername, messageType, plaintext, expectedType = null) {
-    const decrypted = this.decryptMessage(fromUsername, messageType, plaintext);
-    return this.#decrypt(decrypted, expectedType);
   }
 
   /**
@@ -1314,6 +1257,62 @@ class TinyOlmInstance {
     if (!session)
       throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
     return session.decrypt(encryptedMessage.body);
+  }
+
+  /**
+   * Encrypts a plaintext message to a specified user.
+   *
+   * @param {string} toUsername - The userId of the recipient.
+   * @param {string} plaintext - The plaintext message to encrypt.
+   * @returns {EncryptedMessage} The encrypted message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  encryptMessage(toUsername, plaintext) {
+    return this.#encryptMessage(this.sessions.get(toUsername), toUsername, plaintext);
+  }
+
+  /**
+   * Decrypts a received ciphertext message from a specified user.
+   *
+   * @param {string} fromUsername - The userId of the sender.
+   * @param {number} messageType - The type of the message (0: pre-key, 1: message).
+   * @param {string} ciphertext - The ciphertext to decrypt.
+   * @returns {string} The decrypted plaintext message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  decryptMessage(fromUsername, messageType, ciphertext) {
+    return this.#decryptMessage(
+      this.sessions.get(fromUsername),
+      fromUsername,
+      messageType,
+      ciphertext,
+    );
+  }
+
+  /**
+   * Encrypts a data to a specified user.
+   *
+   * @param {string} toUsername - The userId of the recipient.
+   * @param {*} data - The content to encrypt.
+   * @returns {EncryptedMessage} The encrypted message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  encrypt(toUsername, data) {
+    return this.encryptMessage(toUsername, this.#encrypt(data));
+  }
+
+  /**
+   * Decrypts a received data from a specified user.
+   *
+   * @param {string} fromUsername - The userId of the sender.
+   * @param {number} messageType - The type of the message (0: pre-key, 1: message).
+   * @param {string} plaintext - The decrypted content to decrypt.
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {*} The decrypted plaintext message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  decrypt(fromUsername, messageType, plaintext, expectedType = null) {
+    return this.#decrypt(this.decryptMessage(fromUsername, messageType, plaintext), expectedType);
   }
 
   /**
