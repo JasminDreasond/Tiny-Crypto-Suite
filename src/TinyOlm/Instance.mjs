@@ -151,6 +151,15 @@ class TinyOlmInstance {
   #queue = new TinyPromiseQueue();
 
   /**
+   * Returns the internal TinyPromiseQueue instance (tiny-essentials module) used to manage queued operations.
+   *
+   * @returns {TinyPromiseQueue} The internal request queue instance.
+   */
+  getQueue() {
+    return this.#queue;
+  }
+
+  /**
    * Add a new value type and its converter function.
    * @param {string} typeName
    * @param {(data: any) => any} getFunction

@@ -242,3 +242,21 @@ if (tinyOlmInstance.existsDb()) {
   console.warn('Database is not initialized.');
 }
 ```
+
+---
+
+### 🧵 `getQueue()`
+
+Returns the internal `TinyPromiseQueue` (from tiny-essentials module) used to manage asynchronous task queuing and execution order.
+
+This queue ensures that encryption and decryption operations — or any session-related activities — are executed sequentially, avoiding race conditions.
+
+#### Returns:
+- `TinyPromiseQueue`: A queue manager instance that controls promise execution order.
+
+#### Example:
+```js
+const queue = tinyOlm.getQueue();
+queue.enqueue(() => someAsyncTask());
+queue.enqueuePoint(() => someAsyncTask());
+```
