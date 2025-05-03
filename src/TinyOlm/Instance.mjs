@@ -1170,6 +1170,28 @@ class TinyOlmInstance {
   }
 
   /**
+   * @typedef {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }} EncryptedData
+   */
+
+  /**
+   * @typedef {{
+   *   message_index: number,
+   *   content: string
+   * }} DecryptedGroupContent
+   */
+
+  /**
+   * @typedef {{
+   *   message_index: number,
+   *   plaintext: string
+   * }} DecryptedGroupMessage
+   */
+
+  /**
    * @param {Olm.Session|undefined} session
    * @param {string} toUsername
    * @param {string} plaintext
@@ -1223,11 +1245,7 @@ class TinyOlmInstance {
    * @param {Olm.OutboundGroupSession|undefined} session
    * @param {string} roomId
    * @param {string} plaintext
-   * @returns {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }}
+   * @returns {EncryptedData}
    * @throws {Error}
    */
   #encryptGroupMessage(session, roomId, plaintext) {
@@ -1245,12 +1263,8 @@ class TinyOlmInstance {
    * @param {Olm.InboundGroupSession|undefined} session
    * @param {string} roomId
    * @param {string} userId
-   * @param {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }} encryptedMessage
-   * @returns {{ message_index: number; plaintext: string; }}
+   * @param {EncryptedData} encryptedMessage
+   * @returns {DecryptedGroupMessage}
    * @throws {Error}
    */
   #decryptGroupMessage(session, roomId, userId, encryptedMessage) {
@@ -1263,11 +1277,7 @@ class TinyOlmInstance {
    * @param {Olm.OutboundGroupSession|undefined} session
    * @param {string} roomId
    * @param {*} data
-   * @returns {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }}
+   * @returns {EncryptedData}
    * @throws {Error}
    */
   #encryptGroupContent(session, roomId, data) {
@@ -1286,13 +1296,9 @@ class TinyOlmInstance {
    * @param {Olm.InboundGroupSession|undefined} session
    * @param {string} roomId
    * @param {string} userId
-   * @param {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }} encryptedMessage
+   * @param {EncryptedData} encryptedMessage
    * @param {string|null} [expectedType=null]
-   * @returns {{ message_index: number; content: string; }}
+   * @returns {DecryptedGroupContent}
    * @throws {Error}
    */
   #decryptGroupContent(session, roomId, userId, encryptedMessage, expectedType) {
@@ -1365,11 +1371,7 @@ class TinyOlmInstance {
    * Encrypts a plaintext message for a specific room using the outbound group session.
    * @param {string} roomId
    * @param {string} plaintext
-   * @returns {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }}
+   * @returns {EncryptedData}
    * @throws {Error} If no outbound session exists for the given room.
    */
   encryptGroupMessage(roomId, plaintext) {
@@ -1380,12 +1382,8 @@ class TinyOlmInstance {
    * Decrypts an encrypted group message using the inbound group session.
    * @param {string} roomId
    * @param {string} userId
-   * @param {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }} encryptedMessage
-   * @returns {{ message_index: number; plaintext: string; }}
+   * @param {EncryptedData} encryptedMessage
+   * @returns {DecryptedGroupMessage}
    * @throws {Error} If no inbound session exists for the given room and userId.
    */
   decryptGroupMessage(roomId, userId, encryptedMessage) {
@@ -1401,11 +1399,7 @@ class TinyOlmInstance {
    * Encrypts a content for a specific room using the outbound group session.
    * @param {string} roomId
    * @param {*} data
-   * @returns {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }}
+   * @returns {EncryptedData}
    * @throws {Error} If no outbound session exists for the given room.
    */
   encryptGroupContent(roomId, data) {
@@ -1416,13 +1410,9 @@ class TinyOlmInstance {
    * Decrypts an encrypted content using the inbound group session.
    * @param {string} roomId
    * @param {string} userId
-   * @param {{
-   *   body: string,
-   *   session_id: string,
-   *   message_index: number
-   * }} encryptedMessage
+   * @param {EncryptedData} encryptedMessage
    * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
-   * @returns {{ message_index: number; content: string; }}
+   * @returns {DecryptedGroupContent}
    * @throws {Error} If no inbound session exists for the given room and userId.
    */
   decryptGroupContent(roomId, userId, encryptedMessage, expectedType) {
@@ -1433,6 +1423,215 @@ class TinyOlmInstance {
       encryptedMessage,
       expectedType,
     );
+  }
+
+  /**
+   * Encrypts a plaintext message to a specified user from indexedDb.
+   *
+   * @param {string} toUsername - The userId of the recipient.
+   * @param {string} plaintext - The plaintext message to encrypt.
+   * @returns {Promise<EncryptedMessage>} The encrypted message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  async encryptMessageV2(toUsername, plaintext) {
+    const pickled = await this.#idbGet('sessions', toUsername);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let sess;
+      try {
+        sess = new Olm.Session();
+        sess.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(this.#encryptMessage(sess, toUsername, plaintext));
+        sess?.free();
+      }
+    });
+  }
+
+  /**
+   * Decrypts a received ciphertext message from a specified user from indexedDb.
+   *
+   * @param {string} fromUsername - The userId of the sender.
+   * @param {number} messageType - The type of the message (0: pre-key, 1: message).
+   * @param {string} ciphertext - The ciphertext to decrypt.
+   * @returns {Promise<string>} The decrypted plaintext message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  async decryptMessageV2(fromUsername, messageType, ciphertext) {
+    const pickled = await this.#idbGet('sessions', fromUsername);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let sess;
+      try {
+        sess = new Olm.Session();
+        sess.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(this.#decryptMessage(sess, fromUsername, messageType, ciphertext));
+        sess?.free();
+      }
+    });
+  }
+
+  /**
+   * Encrypts a data to a specified user from indexedDb.
+   *
+   * @param {string} toUsername - The userId of the recipient.
+   * @param {*} data - The content to encrypt.
+   * @returns {Promise<EncryptedMessage>} The encrypted message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  async encryptV2(toUsername, data) {
+    const pickled = await this.#idbGet('sessions', toUsername);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let sess;
+      try {
+        sess = new Olm.Session();
+        sess.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(this.#encryptMessage(sess, toUsername, this.#encrypt(data)));
+        sess?.free();
+      }
+    });
+  }
+
+  /**
+   * Decrypts a received data from a specified user from indexedDb.
+   *
+   * @param {string} fromUsername - The userId of the sender.
+   * @param {number} messageType - The type of the message (0: pre-key, 1: message).
+   * @param {string} plaintext - The decrypted content to decrypt.
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {Promise<*>} The decrypted plaintext message.
+   * @throws {Error} Throws an error if no session exists with the given userId.
+   */
+  async decryptV2(fromUsername, messageType, plaintext, expectedType = null) {
+    const pickled = await this.#idbGet('sessions', fromUsername);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let sess;
+      try {
+        sess = new Olm.Session();
+        sess.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(
+          this.#decrypt(
+            this.#decryptMessage(sess, fromUsername, messageType, plaintext),
+            expectedType,
+          ),
+        );
+        sess?.free();
+      }
+    });
+  }
+
+  /**
+   * Encrypts a plaintext message for a specific room using the outbound group session from indexedDb.
+   * @param {string} roomId
+   * @param {string} plaintext
+   * @returns {Promise<EncryptedData>}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  async encryptGroupMessageV2(roomId, plaintext) {
+    const pickled = await this.#idbGet('groupSessions', roomId);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let session;
+      try {
+        session = new Olm.OutboundGroupSession();
+        session.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(this.#encryptGroupMessage(session, roomId, plaintext));
+        session?.free();
+      }
+    });
+  }
+
+  /**
+   * Decrypts an encrypted group message using the inbound group session from indexedDb.
+   * @param {string} roomId
+   * @param {string} userId
+   * @param {EncryptedData} encryptedMessage
+   * @returns {Promise<DecryptedGroupMessage>}
+   * @throws {Error} If no inbound session exists for the given room and userId.
+   */
+  async decryptGroupMessageV2(roomId, userId, encryptedMessage) {
+    const sessionId = this.#getGroupSessionId(roomId, userId);
+    const pickled = await this.#idbGet('groupInboundSessions', sessionId);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let inbound;
+      try {
+        inbound = new Olm.InboundGroupSession();
+        inbound.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(this.#decryptGroupMessage(inbound, roomId, userId, encryptedMessage));
+        inbound?.free();
+      }
+    });
+  }
+
+  /**
+   * Encrypts a content for a specific room using the outbound group session from indexedDb.
+   * @param {string} roomId
+   * @param {*} data
+   * @returns {Promise<EncryptedData>}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  async encryptGroupContentV2(roomId, data) {
+    const pickled = await this.#idbGet('groupSessions', roomId);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let session;
+      try {
+        session = new Olm.OutboundGroupSession();
+        session.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(this.#encryptGroupContent(session, roomId, data));
+        session?.free();
+      }
+    });
+  }
+
+  /**
+   * Decrypts an encrypted content using the inbound group session from indexedDb.
+   * @param {string} roomId
+   * @param {string} userId
+   * @param {EncryptedData} encryptedMessage
+   * @param {string|null} [expectedType=null] - Optionally specify the expected type of the decrypted data. If provided, the method will validate the type of the deserialized value.
+   * @returns {Promise<DecryptedGroupContent>}
+   * @throws {Error} If no inbound session exists for the given room and userId.
+   */
+  async decryptGroupContentV2(roomId, userId, encryptedMessage, expectedType) {
+    const sessionId = this.#getGroupSessionId(roomId, userId);
+    const pickled = await this.#idbGet('groupInboundSessions', sessionId);
+    return new Promise((resolve, reject) => {
+      const Olm = tinyOlm.getOlm();
+      let inbound;
+      try {
+        inbound = new Olm.InboundGroupSession();
+        inbound.unpickle(this.password, pickled);
+      } catch (err) {
+        reject(err);
+      } finally {
+        resolve(this.#decryptGroupContent(inbound, roomId, userId, encryptedMessage, expectedType));
+        inbound?.free();
+      }
+    });
   }
 }
 
