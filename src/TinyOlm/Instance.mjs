@@ -195,6 +195,29 @@ class TinyOlmInstance {
   #db = null;
   /** @type {number} */
   #dbVersion = 1;
+  /** @type {boolean} */
+  #useLocal = true;
+
+  /**
+   * Enables or disables the functions of use in-memory storage.
+   *
+   * When set to `true`, operations will use local in-memory storage,
+   * useful for tests or temporary sessions that don't require persistence.
+   *
+   * @param {boolean} value - `true` to use in-memory storage, `false` to disable it.
+   */
+  setUseLocal(value) {
+    this.#useLocal = value;
+  }
+
+  /**
+   * Returns whether in-memory storage is currently being used.
+   *
+   * @returns {boolean} `true` if the system is set to use in-memory storage, otherwise `false`.
+   */
+  isUseLocal() {
+    return this.#useLocal;
+  }
 
   /**
    * Saves the current account to IndexedDB using a predefined key.
@@ -410,15 +433,19 @@ class TinyOlmInstance {
   }
 
   async _testIndexedDb() {
+    console.log('ACCOUNT');
     const accountPickles = await this.#idbGetAll('account');
     console.log(accountPickles);
 
+    console.log('SESSIONS');
     const sessionPickles = await this.#idbGetAll('sessions');
     console.log(sessionPickles);
 
+    console.log('GROUP SESSIONS');
     const groupSessionPickles = await this.#idbGetAll('groupSessions');
     console.log(groupSessionPickles);
 
+    console.log('GROUP INBOUND SESSIONS');
     const groupInboundPickles = await this.#idbGetAll('groupInboundSessions');
     console.log(groupInboundPickles);
   }
@@ -599,6 +626,52 @@ class TinyOlmInstance {
   }
 
   /**
+   * Export a specific Olm session with a given user from indexedDb.
+   *
+   * @param {string} userId - The userId of the remote device.
+   * @returns {Promise<string>} The pickled Olm session.
+   * @throws {Error} If the session is not found.
+   */
+  async exportDbSession(userId) {
+    return this.#idbGet('sessions', userId);
+  }
+
+  /**
+   * Export an outbound group session for a specific room from indexedDb.
+   *
+   * @param {string} roomId - The ID of the room.
+   * @returns {Promise<string>} The pickled outbound group session.
+   * @throws {Error} If the group session is not found.
+   */
+  async exportDbGroupSession(roomId) {
+    return this.#idbGet('groupSessions', roomId);
+  }
+
+  /**
+   * Export an inbound group session for a specific room and sender from indexedDb.
+   *
+   * @param {string} roomId - The ID of the room.
+   * @param {string} userId - The sender's userId or session owner.
+   * @returns {Promise<string>} The pickled inbound group session.
+   * @throws {Error} If the inbound group session is not found.
+   */
+  async exportDbInboundGroupSession(roomId, userId) {
+    return this.#idbGet('groupInboundSessions', this.#getGroupSessionId(roomId, userId));
+  }
+
+  /**
+   * @returns {Promise<ExportedOlmInstance>} Serial structure
+   */
+  async exportDbInstance() {
+    return {
+      account: this.exportAccount(),
+      sessions: await this.#idbGetAll('sessions'),
+      groupSessions: await this.#idbGetAll('groupSessions'),
+      groupInboundSessions: await this.#idbGetAll('groupInboundSessions'),
+    };
+  }
+
+  /**
    * Import and restore an Olm account from a pickled string.
    *
    * @param {string} pickled - The pickled Olm account string.
@@ -627,7 +700,7 @@ class TinyOlmInstance {
     const Olm = tinyOlm.getOlm();
     const sess = new Olm.Session();
     sess.unpickle(password, pickled);
-    this.sessions.set(key, sess);
+    if (this.isUseLocal()) this.sessions.set(key, sess);
 
     await this.#idbPut('sessions', key, sess.pickle(this.password));
     this.#emit(TinyOlmEvents.ImportSession, key, sess);
@@ -645,7 +718,7 @@ class TinyOlmInstance {
     const Olm = tinyOlm.getOlm();
     const group = new Olm.OutboundGroupSession();
     group.unpickle(password, pickled);
-    this.groupSessions.set(key, group);
+    if (this.isUseLocal()) this.groupSessions.set(key, group);
 
     if (this.existsDb()) await this.#idbPut('groupSessions', key, group.pickle(this.password));
     this.#emit(TinyOlmEvents.ImportGroupSession, key, group);
@@ -663,7 +736,7 @@ class TinyOlmInstance {
     const Olm = tinyOlm.getOlm();
     const inbound = new Olm.InboundGroupSession();
     inbound.unpickle(password, pickled);
-    this.groupInboundSessions.set(key, inbound);
+    if (this.isUseLocal()) this.groupInboundSessions.set(key, inbound);
 
     if (this.existsDb())
       await this.#idbPut('groupInboundSessions', key, inbound.pickle(this.password));
@@ -731,7 +804,7 @@ class TinyOlmInstance {
 
     if (this.existsDb()) await this.#idbDelete('sessions', userId);
     this.#emit(TinyOlmEvents.RemoveSession, userId, session);
-    return this.sessions.delete(userId);
+    return this.isUseLocal() ? this.sessions.delete(userId) : true;
   }
 
   /**
@@ -779,7 +852,7 @@ class TinyOlmInstance {
     const Olm = tinyOlm.getOlm();
     const outboundSession = new Olm.OutboundGroupSession();
     outboundSession.create();
-    this.groupSessions.set(roomId, outboundSession);
+    if (this.isUseLocal()) this.groupSessions.set(roomId, outboundSession);
 
     if (this.existsDb())
       await this.#idbPut('groupSessions', roomId, outboundSession.pickle(this.password));
@@ -800,6 +873,21 @@ class TinyOlmInstance {
   }
 
   /**
+   * Exports the current outbound group session key for a room from the indexdedDb
+   * @param {string} roomId
+   * @returns {Promise<string>}
+   * @throws {Error} If no outbound session exists for the given room.
+   */
+  async exportDbGroupSessionId(roomId) {
+    const Olm = tinyOlm.getOlm();
+    const pickled = await this.#idbGet('groupSessions', roomId);
+    if (!pickled) throw new Error(`No outbound group session found for room: ${roomId}`);
+    const outboundSession = new Olm.OutboundGroupSession();
+    outboundSession.unpickle(this.password, pickled);
+    return outboundSession.session_key();
+  }
+
+  /**
    * Imports an inbound group session using a provided session key.
    * @param {string} roomId
    * @param {string} userId
@@ -811,7 +899,7 @@ class TinyOlmInstance {
     const inboundSession = new Olm.InboundGroupSession();
     inboundSession.create(sessionKey);
     const sessionId = this.#getGroupSessionId(roomId, userId);
-    this.groupInboundSessions.set(sessionId, inboundSession);
+    if (this.isUseLocal()) this.groupInboundSessions.set(sessionId, inboundSession);
 
     if (this.existsDb())
       await this.#idbPut('groupInboundSessions', sessionId, inboundSession.pickle(this.password));
@@ -849,7 +937,7 @@ class TinyOlmInstance {
 
     if (this.existsDb()) await this.#idbDelete('groupSessions', roomId);
     this.#emit(TinyOlmEvents.RemoveGroupSession, roomId, session);
-    return this.groupSessions.delete(roomId);
+    return this.isUseLocal() ? this.groupSessions.delete(roomId) : true;
   }
 
   /**
@@ -901,7 +989,7 @@ class TinyOlmInstance {
 
     if (this.existsDb()) await this.#idbDelete('groupInboundSessions', sessionId);
     this.#emit(TinyOlmEvents.RemoveInboundGroupSession, sessionId, session);
-    return this.groupInboundSessions.delete(sessionId);
+    return this.isUseLocal() ? this.groupInboundSessions.delete(sessionId) : true;
   }
 
   /**
@@ -1007,7 +1095,7 @@ class TinyOlmInstance {
     const Olm = tinyOlm.getOlm();
     const session = new Olm.Session();
     session.create_outbound(this.account, theirIdentityKey, theirOneTimeKey);
-    this.sessions.set(theirUsername, session);
+    if (this.isUseLocal()) this.sessions.set(theirUsername, session);
 
     if (this.existsDb())
       await this.#idbPut('sessions', theirUsername, session.pickle(this.password));
@@ -1029,7 +1117,7 @@ class TinyOlmInstance {
     const session = new Olm.Session();
     session.create_inbound_from(this.account, senderIdentityKey, ciphertext);
     this.account.remove_one_time_keys(session);
-    this.sessions.set(senderUsername, session);
+    if (this.isUseLocal()) this.sessions.set(senderUsername, session);
 
     if (this.existsDb())
       await this.#idbPut('sessions', senderUsername, session.pickle(this.password));

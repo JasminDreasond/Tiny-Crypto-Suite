@@ -1,3 +1,5 @@
+import clone from 'clone';
+
 /**
  * Simulates a basic Matrix server handling identity and one-time keys.
  * @class
@@ -21,7 +23,7 @@ class FakeMatrixServer {
    * @param {{curve25519: string, ed25519: string}} identityKeys - The user's identity keys.
    */
   uploadIdentityKeys(username, identityKeys) {
-    this.identityKeys.set(username, identityKeys);
+    this.identityKeys.set(username, clone(identityKeys));
   }
 
   /**
@@ -30,7 +32,7 @@ class FakeMatrixServer {
    * @param {Record<string, {key: string}>} oneTimeKeys - One-time keys.
    */
   uploadOneTimeKeys(username, oneTimeKeys) {
-    this.oneTimeKeys.set(username, oneTimeKeys);
+    this.oneTimeKeys.set(username, clone(oneTimeKeys));
   }
 
   /**
@@ -39,7 +41,7 @@ class FakeMatrixServer {
    * @returns {string|null} The Curve25519 key or null if not found.
    */
   fetchIdentityKey(username) {
-    return this.identityKeys.get(username)?.curve25519 ?? null;
+    return clone(this.identityKeys.get(username))?.curve25519 ?? null;
   }
 
   /**
@@ -55,7 +57,7 @@ class FakeMatrixServer {
     }
     const [keyId, keyObj] = Object.entries(keys)[0];
     delete keys[keyId];
-    return keyObj.key;
+    return clone(keyObj.key);
   }
 }
 
