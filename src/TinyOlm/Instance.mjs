@@ -1228,6 +1228,28 @@ class TinyOlmInstance {
   }
 
   /**
+   * @param {*} data
+   * @returns {string}
+   * @throws {Error}
+   */
+  #encrypt(data) {
+    return this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
+  }
+
+  /**
+   * @param {string} decrypted
+   * @param {string|null} [expectedType=null]
+   * @returns {*}
+   * @throws {Error}
+   */
+  #decrypt(decrypted, expectedType = null) {
+    const { value } = this.isDeep
+      ? this.#parser.deserializeDeep(decrypted, expectedType)
+      : this.#parser.deserialize(decrypted, expectedType);
+    return value;
+  }
+
+  /**
    * Encrypts a data to a specified user.
    *
    * @param {string} toUsername - The userId of the recipient.
@@ -1236,8 +1258,7 @@ class TinyOlmInstance {
    * @throws {Error} Throws an error if no session exists with the given userId.
    */
   encrypt(toUsername, data) {
-    const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
-    return this.encryptMessage(toUsername, plainText);
+    return this.encryptMessage(toUsername, this.#encrypt(data));
   }
 
   /**
@@ -1252,10 +1273,7 @@ class TinyOlmInstance {
    */
   decrypt(fromUsername, messageType, plaintext, expectedType = null) {
     const decrypted = this.decryptMessage(fromUsername, messageType, plaintext);
-    const { value } = this.isDeep
-      ? this.#parser.deserializeDeep(decrypted, expectedType)
-      : this.#parser.deserialize(decrypted, expectedType);
-    return value;
+    return this.#decrypt(decrypted, expectedType);
   }
 
   /**
@@ -1349,7 +1367,7 @@ class TinyOlmInstance {
     const session = this.groupSessions.get(roomId);
     if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
 
-    const plainText = this.isDeep ? this.#parser.serializeDeep(data) : this.#parser.serialize(data);
+    const plainText = this.#encrypt(data);
     const ciphertext = session.encrypt(plainText);
     return {
       body: ciphertext,
@@ -1376,11 +1394,10 @@ class TinyOlmInstance {
     if (!session)
       throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
     const result = session.decrypt(encryptedMessage.body);
-
-    const { value } = this.isDeep
-      ? this.#parser.deserializeDeep(result.plaintext, expectedType)
-      : this.#parser.deserialize(result.plaintext, expectedType);
-    return { message_index: result.message_index, content: value };
+    return {
+      message_index: result.message_index,
+      content: this.#decrypt(result.plaintext, expectedType),
+    };
   }
 }
 

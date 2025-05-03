@@ -422,7 +422,12 @@ async function simulateGroupMatrixCommunication() {
   }
 
   // Diana sends a final data
-  const dianaGroupData = { withPudding: true, time: new Date(), description: 'Yay!' };
+  const dianaGroupData = {
+    withPudding: true,
+    amount: 5,
+    time: new Date(),
+    description: 'Group Yay!',
+  };
   const encryptedDataFromDiana = diana.encryptGroupContent('room-1', dianaGroupData);
 
   console.log(
