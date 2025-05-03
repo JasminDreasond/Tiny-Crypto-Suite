@@ -1260,6 +1260,52 @@ class TinyOlmInstance {
   }
 
   /**
+   * @param {Olm.OutboundGroupSession|undefined} session
+   * @param {string} roomId
+   * @param {*} data
+   * @returns {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }}
+   * @throws {Error}
+   */
+  #encryptGroupContent(session, roomId, data) {
+    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
+
+    const plainText = this.#encrypt(data);
+    const ciphertext = session.encrypt(plainText);
+    return {
+      body: ciphertext,
+      session_id: session.session_id(),
+      message_index: session.message_index(),
+    };
+  }
+
+  /**
+   * @param {Olm.InboundGroupSession|undefined} session
+   * @param {string} roomId
+   * @param {string} userId
+   * @param {{
+   *   body: string,
+   *   session_id: string,
+   *   message_index: number
+   * }} encryptedMessage
+   * @param {string|null} [expectedType=null]
+   * @returns {{ message_index: number; content: string; }}
+   * @throws {Error}
+   */
+  #decryptGroupContent(session, roomId, userId, encryptedMessage, expectedType) {
+    if (!session)
+      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
+    const result = session.decrypt(encryptedMessage.body);
+    return {
+      message_index: result.message_index,
+      content: this.#decrypt(result.plaintext, expectedType),
+    };
+  }
+
+  /**
    * Encrypts a plaintext message to a specified user.
    *
    * @param {string} toUsername - The userId of the recipient.
@@ -1363,16 +1409,7 @@ class TinyOlmInstance {
    * @throws {Error} If no outbound session exists for the given room.
    */
   encryptGroupContent(roomId, data) {
-    const session = this.groupSessions.get(roomId);
-    if (!session) throw new Error(`No outbound group session found for room: ${roomId}`);
-
-    const plainText = this.#encrypt(data);
-    const ciphertext = session.encrypt(plainText);
-    return {
-      body: ciphertext,
-      session_id: session.session_id(),
-      message_index: session.message_index(),
-    };
+    return this.#encryptGroupContent(this.groupSessions.get(roomId), roomId, data);
   }
 
   /**
@@ -1389,14 +1426,13 @@ class TinyOlmInstance {
    * @throws {Error} If no inbound session exists for the given room and userId.
    */
   decryptGroupContent(roomId, userId, encryptedMessage, expectedType) {
-    const session = this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId));
-    if (!session)
-      throw new Error(`No inbound group session found for room: ${roomId} and user: ${userId}`);
-    const result = session.decrypt(encryptedMessage.body);
-    return {
-      message_index: result.message_index,
-      content: this.#decrypt(result.plaintext, expectedType),
-    };
+    return this.#decryptGroupContent(
+      this.groupInboundSessions.get(this.#getGroupSessionId(roomId, userId)),
+      roomId,
+      userId,
+      encryptedMessage,
+      expectedType,
+    );
   }
 }
 
