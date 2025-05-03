@@ -254,7 +254,7 @@ This queue ensures that encryption and decryption operations — or any session-
 #### Returns:
 - `TinyPromiseQueue`: A queue manager instance that controls promise execution order.
 
-#### Example:
+#### 🧑‍💻 Example:
 ```js
 const queue = tinyOlm.getQueue();
 queue.enqueue(() => someAsyncTask());

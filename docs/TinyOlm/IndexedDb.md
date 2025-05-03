@@ -1,4 +1,4 @@
-# TinyOlm IndexedDB Encryption Mode
+# 🔐 TinyOlm IndexedDB Encryption Mode
 
 This tutorial provides a info around the TinyOlm API to perform secure encryption and decryption using only **IndexedDB**.  
 It includes support for both **individual Olm sessions** and **group Megolm sessions**, with all cryptographic sessions serialized and retrieved directly from `indexedDB`.
