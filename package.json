@@ -54,7 +54,8 @@
     "nodejs",
     "browser",
     "secure storage",
-    "serialization"
+    "serialization",
+    "olm"
   ],
   "author": "Yasmin Seidel (Jasmin Dreasond)",
   "license": "GPL-3.0-only",

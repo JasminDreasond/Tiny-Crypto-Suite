@@ -4,6 +4,9 @@ TinyOlm is a minimal and powerful wrapper around [Olm](https://gitlab.matrix.org
 
 Whether you're building a chat app, a P2P network, or just need secure encryption between devices, **TinyOlm** gives you the essentials: identity management, session handling, and message encryption — all wrapped in a compact and intuitive interface.
 
+> ⚠️ **Important:** All encryption and decryption operations are automatically **queued and executed in order** using an internal `TinyPromiseQueue` from module `tiny-essentials`.  
+> This ensures that all cryptographic requests are **processed in the correct sequence**, so you don't need to handle the ordering manually.
+
 ---
 
 ## 🚀 Features
