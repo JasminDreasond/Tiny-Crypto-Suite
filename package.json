@@ -1,6 +1,6 @@
 {
   "name": "tiny-crypto-suite",
-  "version": "1.4.4",
+  "version": "1.5.0",
   "description": "Tiny tools, big crypto — seamless encryption and certificate handling for modern web and Node apps.",
   "scripts": {
     "test": "npm run test:mjs && npm run test:cjs && npm run test:js",
@@ -9,6 +9,7 @@
     "test:mjs": "node test/index.mjs",
     "test:mjs:tiny": "node test/index.mjs tinyCrypto",
     "test:mjs:cert": "node test/index.mjs certCrypto",
+    "test:mjs:chain": "node test/index.mjs tinyChain",
     "test:mjs:olm": "node test/index.mjs olm",
     "fix:prettier": "npm run fix:prettier:src && npm run fix:prettier:test && npm run fix:prettier:rollup.config && npm run fix:prettier:webpack.config",
     "fix:prettier:src": "prettier --write ./src/*",

@@ -62,6 +62,7 @@ const addModule = (entry, library, isClass = false) => {
 addModule('./src/build/TinyCryptoParser.mjs', 'TinyCryptoParser', true);
 addModule('./src/build/TinyCertCrypto.mjs', 'TinyCertCrypto', true);
 addModule('./src/build/TinyCrypto.mjs', 'TinyCrypto', true);
-addModule('./src/build/TinyOlm.mjs', 'TinyOlm');
+addModule('./src/build/TinyOlm.mjs', 'TinyOlm', true);
+addModule('./src/build/TinyChain.mjs', 'TinyChain', true);
 
 export default modules;

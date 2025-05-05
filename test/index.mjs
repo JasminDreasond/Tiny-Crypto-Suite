@@ -1,11 +1,13 @@
 import executeSimulationCert from './TinyCertCrypto.mjs';
 import tinyCryptoSimulation from './TinyCrypto.mjs';
+import tinyChainSimulation from './TinyChain.mjs';
 import simulateMatrixCommunication from './TinyOlm.mjs';
 
 const actions = {
   tinyCrypto: tinyCryptoSimulation,
   certCrypto: executeSimulationCert,
   olm: simulateMatrixCommunication,
+  tinyChain: tinyChainSimulation,
 };
 
 (async () => {
