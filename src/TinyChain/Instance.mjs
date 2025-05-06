@@ -354,11 +354,11 @@ class TinyChainInstance {
   }
 
   getFirstBlock() {
-    return this.getChainValue(0);
+    return this.getChainBlock(0);
   }
 
   getLatestBlock() {
-    return this.getChainValue(this.chain.length - 1);
+    return this.getChainBlock(this.chain.length - 1);
   }
 
   startBalances() {
@@ -518,13 +518,13 @@ class TinyChainInstance {
     return previousBlock.index;
   }
 
-  getChainValue(index) {
-    if (!this.chain[index]) throw new Error("Chain data don't exist!");
-    return this.chain[index].get();
+  getChainBlock(index) {
+    if (!this.chain[index]) throw new Error(`The chain data ${index} don't exist!`);
+    return this.chain[index];
   }
 
-  getChainData(index) {
-    return this.chain[index]?.get() ?? null;
+  getChainBlockTx(index, tx) {
+    return this.getChainBlock(index).getTx(tx);
   }
 
   getAllChainData() {
