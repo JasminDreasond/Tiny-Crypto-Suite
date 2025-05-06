@@ -239,11 +239,13 @@ class TinyChainInstance {
    * @param {boolean} [options.payloadString=true] - If true, treats payloads as strings.
    * @param {boolean} [options.currencyMode=false] - Enables balance tracking and gas economics.
    * @param {boolean} [options.payloadMode=false] - Enables payload execution mode for blocks.
-   * @param {string|number|bigint} [options.initialReward=15000000000000000000] - Reward for the genesis block or first mining.
+   * @param {string|number|bigint} [options.initialReward=15000000000000000000n] - Reward for the genesis block or first mining.
    * @param {string|number|bigint} [options.halvingInterval=100] - Block interval for reward halving logic.
    * @param {string|number|bigint} [options.lastBlockReward=1000] - Reward for the last mined block.
    * @param {Balances} [options.initialBalances={}] - Optional mapping of initial addresses to balances.
    * @param {string[]} [options.admins=[]] - List of admin addresses granted elevated permissions.
+   * 
+   * @throws {Error} Throws an error if any parameter has an invalid type or value.
    */
   constructor({
     transferGas = 15000, // symbolic per transfer, varies in real EVM
@@ -253,12 +255,70 @@ class TinyChainInstance {
     payloadString = true,
     currencyMode = false,
     payloadMode = false,
-    initialReward = 15000000000000000000,
+    initialReward = 15000000000000000000n,
     halvingInterval = 100,
     lastBlockReward = 1000,
     initialBalances = {},
     admins = [],
   } = {}) {
+    // Validation for each parameter
+    if (
+      typeof transferGas !== 'bigint' &&
+      typeof transferGas !== 'number' &&
+      typeof transferGas !== 'string'
+    )
+      throw new Error('Invalid type for transferGas. Expected bigint, number, or string.');
+    if (
+      typeof baseFeePerGas !== 'bigint' &&
+      typeof baseFeePerGas !== 'number' &&
+      typeof baseFeePerGas !== 'string'
+    )
+      throw new Error('Invalid type for baseFeePerGas. Expected bigint, number, or string.');
+    if (
+      typeof priorityFeeDefault !== 'bigint' &&
+      typeof priorityFeeDefault !== 'number' &&
+      typeof priorityFeeDefault !== 'string'
+    )
+      throw new Error('Invalid type for priorityFeeDefault. Expected bigint, number, or string.');
+    if (
+      typeof difficulty !== 'bigint' &&
+      typeof difficulty !== 'number' &&
+      typeof difficulty !== 'string'
+    )
+      throw new Error('Invalid type for difficulty. Expected bigint, number, or string.');
+    if (typeof payloadString !== 'boolean')
+      throw new Error('Invalid type for payloadString. Expected boolean.');
+    if (typeof currencyMode !== 'boolean')
+      throw new Error('Invalid type for currencyMode. Expected boolean.');
+    if (typeof payloadMode !== 'boolean')
+      throw new Error('Invalid type for payloadMode. Expected boolean.');
+    if (
+      typeof initialReward !== 'bigint' &&
+      typeof initialReward !== 'number' &&
+      typeof initialReward !== 'string'
+    )
+      throw new Error('Invalid type for initialReward. Expected bigint, number, or string.');
+    if (
+      typeof halvingInterval !== 'bigint' &&
+      typeof halvingInterval !== 'number' &&
+      typeof halvingInterval !== 'string'
+    )
+      throw new Error('Invalid type for halvingInterval. Expected bigint, number, or string.');
+    if (
+      typeof lastBlockReward !== 'bigint' &&
+      typeof lastBlockReward !== 'number' &&
+      typeof lastBlockReward !== 'string'
+    )
+      throw new Error('Invalid type for lastBlockReward. Expected bigint, number, or string.');
+    if (typeof initialBalances !== 'object' || initialBalances === null)
+      throw new Error('Invalid type for initialBalances. Expected object.');
+
+    if (!Array.isArray(admins)) throw new Error('Invalid type for admins. Expected array.');
+    admins.forEach((admin, index) => {
+      if (typeof admin !== 'string')
+        throw new Error(`Invalid type for admin at index ${index}. Expected string.`);
+    });
+
     /**
      * Whether the payload should be stored as a string or not.
      * Controls the serialization behavior of block payloads.
