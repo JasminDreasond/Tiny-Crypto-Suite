@@ -39,7 +39,7 @@ import TinyChainBlock from './Block.mjs';
  *
  * This class handles a dynamic and extensible blockchain environment with gas fee mechanics,
  * custom payloads, transfer restrictions, admin controls, halving logic, and export/import capabilities.
- * 
+ *
  * @class
  * @beta
  */
@@ -612,6 +612,32 @@ class TinyChainInstance {
         return newBlock;
       };
       return mineNow();
+    });
+  }
+
+  /**
+   * Adds a pre-mined block to the blockchain after validating it and updating balances.
+   *
+   * This method will:
+   * - Validate the block by checking its hash, linkage and structure via `isValidNewBlock()`.
+   * - Update account balances if `currencyMode` or `payloadMode` is enabled.
+   * - Append the validated block to the blockchain and emit the `NewBlock` event.
+   *
+   * @param {TinyChainBlock} minedBlock - The already mined block to be added to the blockchain.
+   *
+   * @returns {Promise<TinyChainBlock>} A promise that resolves to the block once it has been added.
+   *
+   * @throws {Error} Throws an error if the block is invalid or balance update fails.
+   */
+  addMinedBlock(minedBlock) {
+    return this.#queue.enqueue(async () => {
+      const isValid = this.isValidNewBlock(minedBlock);
+      if (!isValid) throw new Error('Invalid block cannot be added to the chain.');
+
+      if (this.currencyMode || this.payloadMode) this.updateBalance(minedBlock);
+      this.chain.push(minedBlock);
+      this.#emit('NewBlock', minedBlock);
+      return minedBlock;
     });
   }
 
