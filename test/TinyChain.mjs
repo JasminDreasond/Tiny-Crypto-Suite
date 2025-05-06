@@ -18,6 +18,7 @@ const tinyChainSimulation = async () => {
   };
 
   const chain = new TinyChain.Instance(chainCfg);
+  await chain.init();
 
   // Verifica balances
   console.log('📊 User balances:');
@@ -103,7 +104,7 @@ const tinyChainSimulation = async () => {
   const halvingBlocks = [];
   for (let i = 0; i < 20; i++) {
     const block = chain.createBlock('alice');
-    halvingBlocks.push(chain.mineBlockAsync('miner', block));
+    halvingBlocks.push(chain.mineBlock('miner', block));
   }
   await Promise.all(halvingBlocks);
 

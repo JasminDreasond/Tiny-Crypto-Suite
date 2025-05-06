@@ -124,7 +124,7 @@ class TinyChainInstance {
     return this.#parser.addValueType(typeName, getFunction, convertFunction);
   }
 
-  createGenesisBlock() {
+  #createGenesisBlock() {
     return this.#createBlockInstance({
       index: 0n,
       previousHash: '0',
@@ -157,7 +157,7 @@ class TinyChainInstance {
   }
 
   burnedBalance = BigInt(0);
-  chain = [this.createGenesisBlock()];
+  chain = [];
 
   constructor({
     transferGas = 15000, // symbolic per transfer, varies in real EVM
@@ -186,6 +186,28 @@ class TinyChainInstance {
 
     if (currencyMode) this.initialBalances = initialBalances;
     this.startBalances();
+  }
+
+  #init() {
+    if (this.chain.length > 0)
+      throw new Error('Blockchain already initialized with a genesis block');
+    const block = this.#createGenesisBlock();
+    this.chain.push(block);
+    return block;
+  }
+
+  async init() {
+    return this.#queue.enqueue(async () => {
+      const block = this.#init();
+      this.#emit('Initialized', block);
+    });
+  }
+
+  async initAsync() {
+    return this.#queue.enqueue(async () => {
+      const block = this.#init();
+      this.#emit('Initialized', block);
+    });
   }
 
   #createBlockInstance(options) {
@@ -237,19 +259,28 @@ class TinyChainInstance {
     return dataGas + transfersGas;
   }
 
+  #isValidBlock(current, previous) {
+    if (!current) return null;
+    if (current.hash !== current.calculateHash()) return false;
+    if (previous && current.previousHash !== previous.hash) return false;
+    return true;
+  }
+
   isValid(startIndex = 0, endIndex = null) {
     const end = endIndex ?? this.chain.length - 1;
 
     for (let i = Math.max(startIndex, 1); i <= end; i++) {
       const current = this.chain[i];
       const previous = this.chain[i - 1];
-
-      if (!current) return null;
-      if (current.hash !== current.calculateHash()) return false;
-      if (current.previousHash !== previous.hash) return false;
+      const result = this.#isValidBlock(current, previous);
+      if (!result) return result;
     }
 
     return true;
+  }
+
+  isValidNewBlock(newBlock) {
+    return this.#isValidBlock(newBlock, this.getLatestBlock());
   }
 
   getCurrentReward() {
@@ -310,19 +341,16 @@ class TinyChainInstance {
 
   mineBlock(minerAddress, newBlock) {
     return this.#queue.enqueue(async () => {
-      newBlock.mineBlock(minerAddress, this.#getPrevsBlockData());
-      this.#insertNewBlock(newBlock);
-      this.#emit('NewBlock', newBlock);
-      return newBlock;
-    });
-  }
-
-  mineBlockAsync(minerAddress, newBlock) {
-    return this.#queue.enqueue(async () => {
-      await newBlock.mineBlockAsync(minerAddress, this.#getPrevsBlockData());
-      this.#insertNewBlock(newBlock);
-      this.#emit('NewBlock', newBlock);
-      return newBlock;
+      const mineNow = async () => {
+        const result = await newBlock.mine(minerAddress, this.#getPrevsBlockData());
+        if (!result.success) throw new Error('Block mining failed');
+        const isValid = this.isValidNewBlock(newBlock);
+        if (!isValid) throw new Error('Block mining invalid');
+        this.#insertNewBlock(newBlock);
+        this.#emit('NewBlock', newBlock);
+        return newBlock;
+      };
+      return mineNow();
     });
   }
 

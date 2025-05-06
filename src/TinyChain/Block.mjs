@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { Buffer } from 'buffer';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
 /**
@@ -65,6 +66,7 @@ class TinyChainBlock {
   #parser;
 
   #payloadString = false;
+  #stopRequested = false;
 
   /**
    * Validates and sanitizes the list of transfers.
@@ -230,6 +232,16 @@ class TinyChainBlock {
   }
 
   /**
+   * Stops the mining process by setting the internal stop flag.
+   * This allows asynchronous mining loops to exit gracefully.
+   *
+   * @returns {void}
+   */
+  stopMining() {
+    this.#stopRequested = true;
+  }
+
+  /**
    * Returns a plain object representing all public data of the block.
    * @returns {{
    *   index: bigint,
@@ -272,81 +284,67 @@ class TinyChainBlock {
    */
   calculateHash() {
     let value = '';
-    value += this.timestamp;
+    value += String(this.timestamp);
     value += this.previousHash;
     value += this.#parser.serializeDeep(this.data);
     value += this.index.toString();
     value += this.nonce.toString();
-    return createHash('sha256').update(value).digest('hex');
+    return createHash('sha256').update(Buffer.from(value, 'utf-8')).digest('hex');
   }
 
   /**
-   * Validates if the provided miner address is a non-empty string.
-   * @param {string|null} execAddress
-   * @returns {true}
+   * Mines the block until a valid hash is found.
+   * @param {string|null} minerAddress - Address of the miner.
+   * @param {{ previousHash?: string, index?: bigint, onComplete?: function, onProgress?: function }} [options={}]
+   * @returns {Promise<{ nonce: bigint, hash: string, success: boolean }>}
    * @throws {Error} If the address is invalid.
    */
-  #validateMinerName(execAddress) {
-    if (typeof execAddress !== 'string')
-      throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
+  async mine(minerAddress = null, { previousHash = '0', index = 0n, onComplete, onProgress } = {}) {
+    if (typeof minerAddress !== 'string')
+      throw new Error(`Invalid address: expected a string, got "${typeof minerAddress}"`);
 
-    if (execAddress.trim().length === 0)
+    if (minerAddress.trim().length === 0)
       throw new Error('Invalid address: address string cannot be empty or only whitespace');
 
-    return true;
-  }
+    const difficultyPrefix = '0'.repeat(Number(this.difficulty));
+    let attempts = 0;
+    const startTime = Date.now();
 
-  /**
-   * Asynchronously mines the block until a valid hash is found (without freeze risk).
-   * @param {string|null} minerAddress - Address of the miner.
-   * @param {{ previousHash?: string, index?: bigint }} [options={}]
-   * @returns {Promise<{ nonce: bigint, hash: string }>}
-   */
-  async mineBlockAsync(minerAddress = null, { previousHash = '0', index = 0n } = {}) {
-    return new Promise((resolve, reject) => {
-      try {
-        this.#validateMinerName(minerAddress);
-      } catch (err) {
-        reject(err);
-      } finally {
-        const target = '0'.repeat(Number(this.difficulty));
-        this.index = index;
-        this.previousHash = previousHash;
-
-        const mine = () => {
-          while (!this.hash.startsWith(target)) {
-            this.nonce++;
-            this.hash = this.calculateHash();
-            if (this.nonce % 1000n === 0n) return setTimeout(mine, 0);
-          }
-
-          if (minerAddress) this.miner = minerAddress;
-          resolve({ nonce: this.nonce, hash: this.hash });
-        };
-        mine();
-      }
-    });
-  }
-
-  /**
-   * Synchronously mines the block until a valid hash is found.
-   * @param {string|null} minerAddress - Address of the miner.
-   * @param {{ previousHash?: string, index?: bigint }} [options={}]
-   * @returns {{ nonce: bigint, hash: string }}
-   */
-  mineBlock(minerAddress = null, { previousHash = '0', index = 0n } = {}) {
-    this.#validateMinerName(minerAddress);
-    const target = '0'.repeat(Number(this.difficulty));
     this.index = index;
     this.previousHash = previousHash;
+    this.timestamp = startTime;
 
-    while (!this.hash.startsWith(target)) {
-      this.nonce++;
-      this.hash = this.calculateHash();
-    }
+    const mineStep = async () => {
+      for (let i = 0; i < 10000; i++) {
+        if (this.#stopRequested) return { nonce: this.nonce, hash: this.hash, success: false };
 
-    if (minerAddress) this.miner = minerAddress;
-    return { nonce: this.nonce, hash: this.hash };
+        this.nonce++;
+        this.hash = this.calculateHash();
+        attempts++;
+
+        if (this.hash.startsWith(difficultyPrefix)) {
+          const endTime = Date.now();
+          const elapsedSeconds = (endTime - startTime) / 1000;
+          const hashrate = (attempts / elapsedSeconds).toFixed(2);
+          if (typeof onComplete === 'function') onComplete(parseFloat(hashrate));
+          if (minerAddress) this.miner = minerAddress;
+          return { nonce: this.nonce, hash: this.hash, success: true };
+        }
+      }
+
+      if (typeof onProgress === 'function') {
+        const currentTime = Date.now();
+        const elapsedSeconds = (currentTime - startTime) / 1000;
+        const currentHashrate = (attempts / elapsedSeconds).toFixed(2);
+        onProgress(parseFloat(currentHashrate));
+      }
+
+      // Yield to the event loop to avoid blocking
+      await new Promise((resolve) => setImmediate(resolve));
+      return mineStep();
+    };
+
+    return mineStep();
   }
 
   /**
