@@ -1,11 +1,53 @@
-// @ts-nocheck
 import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
 import TinyChainBlock from './Block.mjs';
 
+/**
+ * A mapping of addresses to their balances.
+ *
+ * Each key in this object represents an address (usually a string),
+ * and the corresponding value is a `bigint` representing the starting balance
+ * for that address in the blockchain.
+ *
+ * @example
+ * {
+ *   alice: 1000000000n,
+ *   bob: 1000000000n,
+ *   charlie: 1000000000n,
+ *   adminUser: 1000000000n
+ * }
+ *
+ * @typedef {Object.<string, bigint>} Balances
+ */
+
+/**
+ * Represents the configuration for gas usage and fee settings in a blockchain block.
+ * This config is used to define the gas-related parameters when creating or processing a block.
+ * These values are essential for controlling the transaction cost and prioritization of block inclusion.
+ *
+ * @typedef {Object} GasConfig
+ * @property {bigint} [gasLimit=50000n] - The maximum allowed gas usage for the block (defaults to 50,000).
+ * @property {bigint} [maxFeePerGas=200n] - The maximum fee per gas unit for the block (defaults to 200).
+ * @property {bigint} [maxPriorityFeePerGas=this.priorityFeeDefault] - The priority fee per gas unit (defaults to the default value).
+ */
+
+/**
+ * Represents a complete blockchain instance, managing block creation, mining,
+ * validation, and balance tracking in optional currency and payload modes.
+ *
+ * This class handles a dynamic and extensible blockchain environment with gas fee mechanics,
+ * custom payloads, transfer restrictions, admin controls, halving logic, and export/import capabilities.
+ * 
+ * @class
+ * @beta
+ */
 class TinyChainInstance {
+  /** @typedef {import('./Block.mjs').Transaction} Transaction */
+  /** @typedef {import('./Block.mjs').TransactionData} TransactionData */
+  /** @typedef {import('./Block.mjs').GetTransactionData} GetTransactionData */
+
   /**
    * Important instance used to make event emitter.
    * @type {EventEmitter}
@@ -145,20 +187,63 @@ class TinyChainInstance {
     });
   }
 
+  /**
+   * Checks whether the blockchain has a valid genesis block.
+   *
+   * A genesis block is identified by having:
+   * - index equal to 0n
+   * - previousHash equal to `'0'`
+   * - at least one data entry
+   * - the first data entry's `address` equal to `'0'`
+   *
+   * @returns {boolean} `true` if a valid genesis block is present, otherwise `false`.
+   */
   hasGenesisBlock() {
     if (this.chain.length === 0) return false;
-    const firstBlock = this.chain[0];
+    const firstBlock = this.getFirstBlock();
     return (
       firstBlock.index === 0n &&
       firstBlock.previousHash === '0' &&
-      firstBlock[0] &&
-      firstBlock[0].address === '0'
+      firstBlock.data[0] &&
+      firstBlock.data[0].address === '0'
     );
   }
 
+  /**
+   * Tracks the total amount of balance that has been permanently burned.
+   *
+   * This value accumulates all tokens that were removed from circulation
+   * through burn mechanisms (e.g., excessive gas fees or manual burns).
+   *
+   * @type {bigint}
+   */
   burnedBalance = BigInt(0);
+
+  /** @type {TinyChainBlock[]} */
   chain = [];
 
+  /**
+   * Constructs a new blockchain instance with optional configuration parameters.
+   *
+   * This constructor initializes core parameters of the blockchain, including gas costs,
+   * difficulty, reward system, and modes (currency/payload). It also sets up the initial
+   * balances and admin list. If `currencyMode` is enabled, initial balances will be
+   * registered immediately.
+   *
+   * @param {Object} [options] - Configuration options for the blockchain instance.
+   * @param {string|number|bigint} [options.transferGas=15000] - Fixed gas cost per transfer operation (symbolic).
+   * @param {string|number|bigint} [options.baseFeePerGas=21000] - Base gas fee per unit (in gwei).
+   * @param {string|number|bigint} [options.priorityFeeDefault=2] - Default priority tip per gas unit (in gwei).
+   * @param {string|number|bigint} [options.difficulty=1] - Difficulty for proof-of-work or validation cost.
+   * @param {boolean} [options.payloadString=true] - If true, treats payloads as strings.
+   * @param {boolean} [options.currencyMode=false] - Enables balance tracking and gas economics.
+   * @param {boolean} [options.payloadMode=false] - Enables payload execution mode for blocks.
+   * @param {string|number|bigint} [options.initialReward=15000000000000000000] - Reward for the genesis block or first mining.
+   * @param {string|number|bigint} [options.halvingInterval=100] - Block interval for reward halving logic.
+   * @param {string|number|bigint} [options.lastBlockReward=1000] - Reward for the last mined block.
+   * @param {Balances} [options.initialBalances={}] - Optional mapping of initial addresses to balances.
+   * @param {string[]} [options.admins=[]] - List of admin addresses granted elevated permissions.
+   */
   constructor({
     transferGas = 15000, // symbolic per transfer, varies in real EVM
     baseFeePerGas = 21000,
@@ -173,23 +258,114 @@ class TinyChainInstance {
     initialBalances = {},
     admins = [],
   } = {}) {
+    /**
+     * Whether the payload should be stored as a string or not.
+     * Controls the serialization behavior of block payloads.
+     *
+     * @type {boolean}
+     */
     this.#payloadString = payloadString;
+
+    /**
+     * A set of administrator addresses with elevated privileges.
+     *
+     * @type {Set<string>}
+     */
     this.admins = new Set(admins);
+
+    /**
+     * Enables or disables currency mode, where balances are tracked.
+     *
+     * @type {boolean}
+     */
     this.currencyMode = currencyMode;
+
+    /**
+     * Enables or disables payload mode, which allows block data to carry payloads.
+     *
+     * @type {boolean}
+     */
     this.payloadMode = payloadMode;
 
+    /**
+     * The symbolic gas cost applied per transfer operation.
+     *
+     * @type {bigint}
+     */
     this.transferGas = BigInt(transferGas);
-    this.baseFeePerGas = BigInt(baseFeePerGas); // initial base value Fee in gwei
-    this.priorityFeeDefault = BigInt(priorityFeeDefault); // default priority in gwei
+
+    /**
+     * The base fee per unit of gas, similar to Ethereum's `baseFeePerGas`.
+     *
+     * @type {bigint}
+     */
+    this.baseFeePerGas = BigInt(baseFeePerGas);
+
+    /**
+     * The default priority fee (tip) per gas unit offered by transactions.
+     *
+     * @type {bigint}
+     */
+    this.priorityFeeDefault = BigInt(priorityFeeDefault);
+
+    /**
+     * The mining difficulty, used to simulate block validation complexity.
+     *
+     * @type {bigint}
+     */
     this.difficulty = BigInt(difficulty);
+
+    /**
+     * The initial block reward.
+     *
+     * @type {bigint}
+     */
     this.initialReward = BigInt(initialReward);
+
+    /**
+     * The number of blocks after which the mining reward is halved.
+     *
+     * @type {bigint}
+     */
     this.halvingInterval = BigInt(halvingInterval);
+
+    /**
+     * The reward of the last mined block, used for tracking reward evolution.
+     *
+     * @type {bigint}
+     */
     this.lastBlockReward = BigInt(lastBlockReward);
 
-    if (currencyMode) this.initialBalances = initialBalances;
+    if (currencyMode) {
+      /**
+       * The initial balances of accounts, only used if `currencyMode` is enabled.
+       *
+       * @type {Balances}
+       */
+      this.initialBalances = initialBalances;
+    }
+
+    /**
+     * The `balances` object, where the key is the address (string)
+     * and the value is the balance (bigint) of that address.
+     *
+     * @type {Balances}
+     */
+    this.balances = {};
     this.startBalances();
   }
 
+  /**
+   * Initializes the blockchain by creating and pushing the genesis block.
+   *
+   * This method must be called only once. It ensures the blockchain is empty
+   * before creating the genesis block. If the chain already contains blocks,
+   * an error is thrown. The created genesis block is added to the chain and returned.
+   *
+   * @returns {TinyChainBlock} The genesis block that was created and added to the chain.
+   * @throws {Error} If the blockchain already contains a genesis block.
+   *
+   */
   #init() {
     if (this.chain.length > 0)
       throw new Error('Blockchain already initialized with a genesis block');
@@ -198,6 +374,17 @@ class TinyChainInstance {
     return block;
   }
 
+  /**
+   * Asynchronously initializes the blockchain instance by creating the genesis block.
+   *
+   * This method wraps the internal initialization logic in a queue to ensure
+   * exclusive access during the setup phase. It emits an `Initialized` event
+   * once the genesis block has been created and added to the chain.
+   *
+   * @returns {Promise<void>} A promise that resolves once initialization is complete.
+   *
+   * @emits Initialized - When the genesis block is successfully created and added.
+   */
   async init() {
     return this.#queue.enqueue(async () => {
       const block = this.#init();
@@ -205,13 +392,17 @@ class TinyChainInstance {
     });
   }
 
-  async initAsync() {
-    return this.#queue.enqueue(async () => {
-      const block = this.#init();
-      this.#emit('Initialized', block);
-    });
-  }
-
+  /**
+   * Creates a new instance of a block with the given options.
+   *
+   * This method wraps the creation of a `TinyChainBlock`, automatically injecting
+   * internal configuration such as `payloadString` and `parser`, and merging any
+   * additional options provided by the caller.
+   *
+   * @param {Object} options - Additional block options to override or extend defaults.
+   * @returns {TinyChainBlock} A new instance of the TinyChainBlock.
+   *
+   */
   #createBlockInstance(options) {
     return new TinyChainBlock({
       payloadString: this.#payloadString,
@@ -239,7 +430,7 @@ class TinyChainInstance {
   /**
    * Simulates gas estimation for an Ethereum-like transaction.
    * Considers base cost, data size, and per-transfer cost.
-   * @param {Array} transfers - List of transfers (e.g., token or balance movements).
+   * @param {Transaction[]} transfers - List of transfers (e.g., token or balance movements).
    * @param {any} payloadData - Data to be included in the transaction (e.g., contract call).
    * @returns {bigint}
    */
@@ -251,6 +442,7 @@ class TinyChainInstance {
     const serialized = this.#parser.serializeDeep(payloadData);
     let dataGas = 0n;
     for (let i = 0; i < serialized.length; i++) {
+      // @ts-ignore
       dataGas += serialized[i] === 0 ? ZERO_BYTE_COST : NONZERO_BYTE_COST;
     }
 
@@ -261,6 +453,19 @@ class TinyChainInstance {
     return dataGas + transfersGas;
   }
 
+  /**
+   * Validates a single block against its expected hash and optionally the previous block.
+   *
+   * A block is considered valid if:
+   * - It exists
+   * - Its stored hash matches its recalculated hash
+   * - If a previous block is provided, its `previousHash` matches the hash of that block
+   *
+   * @param {TinyChainBlock} current - The block to validate.
+   * @param {TinyChainBlock|null} previous - The previous block in the chain (optional).
+   * @returns {boolean|null} Returns `true` if valid, `false` if invalid, or `null` if block is missing.
+   *
+   */
   #isValidBlock(current, previous) {
     if (!current) return null;
     if (current.hash !== current.calculateHash()) return false;
@@ -268,6 +473,16 @@ class TinyChainInstance {
     return true;
   }
 
+  /**
+   * Validates the blockchain from a starting to an ending index.
+   *
+   * It checks whether each block has a valid hash and that each block correctly references the previous one.
+   * Skips the genesis block by default and starts from index 1 unless a different start is provided.
+   *
+   * @param {number} [startIndex=0] - The starting index to validate from (inclusive).
+   * @param {number|null} [endIndex=null] - The ending index to validate up to (inclusive). Defaults to the last block.
+   * @returns {boolean|null} Returns `true` if the chain is valid, `false` or `null` otherwise.
+   */
   isValid(startIndex = 0, endIndex = null) {
     const end = endIndex ?? this.chain.length - 1;
 
@@ -281,10 +496,27 @@ class TinyChainInstance {
     return true;
   }
 
+  /**
+   * Checks if a new block is valid in relation to the latest block in the chain.
+   *
+   * This is typically used before appending a new block to ensure integrity.
+   *
+   * @param {TinyChainBlock} newBlock - The new block to validate.
+   * @returns {boolean|null} Returns `true` if the new block is valid, otherwise `false` or `null`.
+   */
   isValidNewBlock(newBlock) {
     return this.#isValidBlock(newBlock, this.getLatestBlock());
   }
 
+  /**
+   * Calculates the current block reward based on the chain height and halving intervals.
+   *
+   * The reward starts at `initialReward` and is halved every `halvingInterval` blocks.
+   * If the chain height exceeds the reward threshold, the reward becomes zero.
+   *
+   * @returns {bigint} The current block reward in the smallest unit of currency (e.g., wei, satoshis).
+   *                    Returns `0n` if the reward has been exhausted.
+   */
   getCurrentReward() {
     const height = this.getChainLength();
     if (height > this.lastBlockReward) return 0n;
@@ -293,6 +525,21 @@ class TinyChainInstance {
     return reward > 0n ? reward : 0n;
   }
 
+  /**
+   * Creates a new block for the blockchain with the provided transaction data and gas options.
+   *
+   * The method will validate the address, estimate the gas used for the transactions, and ensure that the gas
+   * limit is not exceeded before creating the block. It also includes reward information if `currencyMode` is enabled.
+   *
+   * @param {string} execAddress - The address that is executing the block, typically the transaction sender.
+   * @param {string} [payloadData=''] - The data to be included in the block's payload. Default is an empty string.
+   * @param {Array<Transaction>} [transfers=[]] - The list of transfers (transactions) to be included in the block.
+   * @param {GasConfig} [gasOptions={}] - Optional gas-related configuration.
+   *
+   * @returns {TinyChainBlock} The newly created block instance with all the relevant data.
+   *
+   * @throws {Error} Throws an error if the `execAddress` is invalid or if the gas limit is exceeded.
+   */
   createBlock(execAddress, payloadData = '', transfers = [], gasOptions = {}) {
     if (typeof execAddress !== 'string')
       throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
@@ -331,6 +578,21 @@ class TinyChainInstance {
     });
   }
 
+  /**
+   * Mines a new block and adds it to the blockchain after validating and updating balances.
+   *
+   * This method will:
+   * - Validate the block by checking its correctness using the `isValidNewBlock()` method.
+   * - Update balances if `currencyMode` or `payloadMode` is enabled.
+   * - Add the mined block to the blockchain and emit an event for the new block.
+   *
+   * @param {string} minerAddress - The address of the miner who is mining the block.
+   * @param {TinyChainBlock} newBlock - The new block instance to be mined.
+   *
+   * @returns {Promise<TinyChainBlock>} A promise that resolves to the mined block once it has been added to the blockchain.
+   *
+   * @throws {Error} Throws an error if the mining process fails, or if the block is invalid.
+   */
   mineBlock(minerAddress, newBlock) {
     return this.#queue.enqueue(async () => {
       const mineNow = async () => {
@@ -353,14 +615,39 @@ class TinyChainInstance {
     });
   }
 
+  /**
+   * Gets the first block in the blockchain.
+   *
+   * This method retrieves the first block from the blockchain by calling `getChainBlock(0)`.
+   *
+   * @returns {TinyChainBlock} The first block in the blockchain.
+   */
   getFirstBlock() {
     return this.getChainBlock(0);
   }
 
+  /**
+   * Gets the latest block in the blockchain.
+   *
+   * This method retrieves the most recent block added to the blockchain by calling `getChainBlock(chain.length - 1)`.
+   *
+   * @returns {TinyChainBlock} The latest block in the blockchain.
+   */
   getLatestBlock() {
     return this.getChainBlock(this.chain.length - 1);
   }
 
+  /**
+   * Initializes the `balances` object and emits events related to balance setup.
+   *
+   * This method resets the internal `balances` object to an empty state and emits
+   * a `BalancesInitialized` event. If `currencyMode` is active, it will populate
+   * the `balances` from the `initialBalances` mapping, converting all balances to BigInt,
+   * and emit a `BalanceStarted` event for each initialized address.
+   *
+   * @emits BalancesInitialized - When the balances object is reset.
+   * @emits BalanceStarted - For each address initialized when in currency mode.
+   */
   startBalances() {
     this.balances = {};
     this.#emit('BalancesInitialized', this.balances);
@@ -372,6 +659,25 @@ class TinyChainInstance {
     }
   }
 
+  /**
+   * Updates the balances of addresses involved in the block, including gas fees and transfers.
+   *
+   * This method handles updating the balances for the addresses involved in the block's transactions.
+   * It checks for sufficient balance, validates transactions, and applies the gas fees.
+   * If the block includes a miner address, it adds the block reward and the gas collected to the miner's balance.
+   *
+   * @param {TinyChainBlock} block - The block whose balances need to be updated.
+   *
+   * @throws {Error} Throws an error if:
+   * - The reward is not a valid `BigInt`.
+   * - The miner address is not a valid string or null.
+   * - Any address in the transfers is invalid or has insufficient balance.
+   * - The gas limit is exceeded.
+   * - A transfer is made by a non-admin without being their own balance.
+   * - Any other invalid operation occurs during balance updates.
+   *
+   * @returns {void} This method does not return any value.
+   */
   updateBalance(block) {
     const reward = block.reward;
     const minerAddress = block.miner;
@@ -406,12 +712,14 @@ class TinyChainInstance {
               if (!isAdmin && from !== execAddress)
                 throw new Error(`Non-admins can only send their own balance.`);
 
-              if (this.balances[from] < amount)
+              // @ts-ignore
+              if (typeof this.balances[from] !== 'bigint' || this.balances[from] < amount)
                 throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
             }
           }
 
           let totalAmount = 0n;
+          // @ts-ignore
           if (Array.isArray(transfers)) for (const tx of transfers) totalAmount += tx.amount;
 
           if (data.gasUsed > data.gasLimit)
@@ -453,7 +761,9 @@ class TinyChainInstance {
                 this.balances[to] = 0n;
                 this.#emit('BalanceStarted', to, this.balances[to]);
               }
+              // @ts-ignore
               this.balances[from] -= amount;
+              // @ts-ignore
               this.balances[to] += amount;
             }
           }
@@ -488,24 +798,56 @@ class TinyChainInstance {
     }
   }
 
-  getBalances(toString = true) {
-    if (!this.currencyMode) return null;
+  /**
+   * Retrieves a copy of all balances in the system.
+   *
+   * This method returns an object mapping each address to its balance.
+   * Only works when `currencyMode` is enabled.
+   *
+   * @returns {Balances} An object where each key is an address and the value is a `bigint` representing its balance.
+   */
+  getBalances() {
+    /** @type {Balances} */
     const result = {};
-    for (const [addr, amount] of Object.entries(this.balances))
-      result[addr] = toString ? amount.toString() : amount;
+    for (const [addr, amount] of Object.entries(this.balances)) result[addr] = amount;
     return result;
   }
 
-  getBurnedBalance(toString = true) {
-    return toString ? this.burnedBalance.toString() : this.burnedBalance;
+  /**
+   * Returns the total amount of burned currency in the system.
+   *
+   * This value represents the sum of rewards and gas fees that were not claimed by any miner (i.e., blocks without a miner address).
+   *
+   * @returns {bigint} The total burned balance as a `bigint`.
+   */
+  getBurnedBalance() {
+    return this.burnedBalance;
   }
 
-  getBalance(address, toString = true) {
-    if (typeof this.balances[address] === 'bigint')
-      return toString ? this.balances[address].toString() : this.balances[address];
-    return toString ? '0' : 0n;
+  /**
+   * Returns the current balance of a specific address.
+   *
+   * If the address does not exist in the balance record, it returns 0n.
+   *
+   * @param {string} address - The address whose balance should be retrieved.
+   * @returns {bigint} The balance of the given address, or 0n if not found.
+   */
+  getBalance(address) {
+    if (typeof this.balances[address] === 'bigint') return this.balances[address];
+    return 0n;
   }
 
+  /**
+   * Recalculates all balances based on the current blockchain state.
+   *
+   * This method resets the `balances` using `startBalances()` and, if either
+   * `currencyMode` or `payloadMode` is enabled, iterates through the entire
+   * blockchain (`this.chain`) applying `updateBalance()` to each block to
+   * recompute the balances. Finally, it emits a `BalanceRecalculated` event
+   * with the updated balances.
+   *
+   * @emits BalanceRecalculated - When the balance recalculation process is complete.
+   */
   recalculateBalances() {
     this.startBalances();
     if (this.currencyMode || this.payloadMode)
@@ -513,24 +855,60 @@ class TinyChainInstance {
     this.#emit('BalanceRecalculated', this.balances);
   }
 
+  /**
+   * Returns the current length of the chain based on the latest block index.
+   *
+   * @returns {bigint} The index of the latest block, representing the chain length.
+   */
   getChainLength() {
     const previousBlock = this.getLatestBlock();
     return previousBlock.index;
   }
 
+  /**
+   * Retrieves a block from the chain at a specific index.
+   *
+   * @param {number} index - The index of the block to retrieve.
+   * @returns {TinyChainBlock} The block instance at the specified index.
+   * @throws {Error} If the block at the given index does not exist.
+   */
   getChainBlock(index) {
     if (!this.chain[index]) throw new Error(`The chain data ${index} don't exist!`);
     return this.chain[index];
   }
 
+  /**
+   * Retrieves a specific transaction from a block at a given index.
+   *
+   * @param {number} index - The index of the block.
+   * @param {string} tx - The index of the transaction within the block.
+   * @returns {TransactionData} The transaction object.
+   */
   getChainBlockTx(index, tx) {
     return this.getChainBlock(index).getTx(tx);
   }
 
+  /**
+   * Returns all the data from the entire blockchain.
+   *
+   * Each block's raw data is returned as structured by its `get()` method.
+   *
+   * @returns {GetTransactionData[]} An array containing all blocks' data.
+   */
   getAllChainData() {
     return this.chain.map((block) => block.get());
   }
 
+  /**
+   * Exports a slice of the blockchain for serialization or transfer.
+   *
+   * The method safely extracts and serializes blocks between two indices.
+   *
+   * @param {number} [startIndex=0] - The starting index of the block range.
+   * @param {number|null} [endIndex=null] - The ending index (inclusive); defaults to the last block.
+   * @returns {string[]} An array of exported block data.
+   * @throws {Error} If indices are out of bounds or invalid.
+   */
   exportChain(startIndex = 0, endIndex = null) {
     const end = endIndex !== null ? endIndex : this.chain.length - 1;
     if (startIndex < 0 || end >= this.chain.length || startIndex > end)
@@ -539,6 +917,14 @@ class TinyChainInstance {
     return this.chain.slice(startIndex, end + 1).map((b) => b.exportBlock());
   }
 
+  /**
+   * Imports and rebuilds a blockchain from serialized block data.
+   *
+   * After import, balances are recalculated and the new chain is validated.
+   *
+   * @param {string[]} chain - The array of serialized blocks to import.
+   * @throws {Error} If the imported chain is null, invalid, or corrupted.
+   */
   importChain(chain) {
     this.chain = chain.map((seValue) => {
       const { value } = this.#parser.deserializeDeep(seValue, 'object');

@@ -3,10 +3,6 @@ import { Buffer } from 'buffer';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
 /**
- * @namespace TinyChainBlock
- */
-
-/**
  * @typedef {Object} NewTransaction
  * @property {string} from - The sender's address
  * @property {string} to - The recipient's address
@@ -42,6 +38,21 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  * @property {string} address - Address that created the block.
  * @property {*} payload - Payload content (usually a string).
  * @property {Array<NewTransaction>} transfers - Transfer list.
+ */
+
+/**
+ * @typedef {{
+ *   index: bigint,
+ *   timestamp: number,
+ *   data: TransactionData[],
+ *   previousHash: string|null,
+ *   difficulty: bigint,
+ *   nonce: bigint,
+ *   hash: string,
+ *   reward: bigint,
+ *   miner: string|null,
+ *   txs: TxIndexMap,
+ * }} GetTransactionData
  */
 
 /**
@@ -274,18 +285,7 @@ class TinyChainBlock {
 
   /**
    * Returns a plain object representing all public data of the block.
-   * @returns {{
-   *   index: bigint,
-   *   timestamp: number,
-   *   data: TransactionData[],
-   *   previousHash: string|null,
-   *   difficulty: bigint,
-   *   nonce: bigint,
-   *   hash: string,
-   *   reward: bigint,
-   *   miner: string|null,
-   *   txs: TxIndexMap,
-   * }}
+   * @returns {GetTransactionData}
    */
   get() {
     return {
