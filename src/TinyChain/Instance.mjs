@@ -588,6 +588,8 @@ class TinyChainInstance {
    *
    * @param {string} minerAddress - The address of the miner who is mining the block.
    * @param {TinyChainBlock} newBlock - The new block instance to be mined.
+   * 
+   * @emits NewBlock - When the new block is added.
    *
    * @returns {Promise<TinyChainBlock>} A promise that resolves to the mined block once it has been added to the blockchain.
    *
@@ -624,6 +626,8 @@ class TinyChainInstance {
    * - Append the validated block to the blockchain and emit the `NewBlock` event.
    *
    * @param {TinyChainBlock} minedBlock - The already mined block to be added to the blockchain.
+   * 
+   * @emits NewBlock - When the new block is added.
    *
    * @returns {Promise<TinyChainBlock>} A promise that resolves to the block once it has been added.
    *
@@ -693,6 +697,11 @@ class TinyChainInstance {
    * If the block includes a miner address, it adds the block reward and the gas collected to the miner's balance.
    *
    * @param {TinyChainBlock} block - The block whose balances need to be updated.
+   * 
+   * @emits BalanceStarted - For each address initialized when in currency mode.
+   * @emits BalanceUpdated - For each address updated when in currency mode.
+   * @emits Payload - For each payload executed when in payload mode.
+   * @emits MinerBalanceUpdated - For each miner address updated when in currency mode.
    *
    * @throws {Error} Throws an error if:
    * - The reward is not a valid `BigInt`.
@@ -947,6 +956,8 @@ class TinyChainInstance {
    * Imports and rebuilds a blockchain from serialized block data.
    *
    * After import, balances are recalculated and the new chain is validated.
+   * 
+   * @emits ImportChain - When the new chain is imported.
    *
    * @param {string[]} chain - The array of serialized blocks to import.
    * @throws {Error} If the imported chain is null, invalid, or corrupted.
