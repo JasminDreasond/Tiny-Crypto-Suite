@@ -209,8 +209,19 @@ class TinyChainInstance {
     );
   }
 
-  /** @type {TinyChainBlock[]} */
+  /**
+   * The tiny blockchain.
+   *
+   * @type {TinyChainBlock[]}
+   */
   chain = [];
+
+  /**
+   * The initial balances of accounts, only used if `currencyMode` is enabled.
+   *
+   * @type {Balances}
+   */
+  initialBalances = {};
 
   /**
    * Constructs a new blockchain instance with optional configuration parameters.
@@ -326,14 +337,7 @@ class TinyChainInstance {
      */
     this.lastBlockReward = BigInt(lastBlockReward);
 
-    if (currencyMode) {
-      /**
-       * The initial balances of accounts, only used if `currencyMode` is enabled.
-       *
-       * @type {Balances}
-       */
-      this.initialBalances = initialBalances;
-    }
+    if (currencyMode) this.setInitialBalances(initialBalances);
 
     /**
      * The `balances` object, where the key is the address (string)
@@ -343,6 +347,43 @@ class TinyChainInstance {
      */
     this.balances = {};
     this.startBalances();
+  }
+
+  /**
+   * Sets the initial balances for the system.
+   *
+   * This method updates the `initialBalances` with a new set of address-balance pairs.
+   * It validates the input to ensure that each address is a valid string and each balance is a positive `bigint`.
+   *
+   * @emits InitialBalancesUpdated - Emitted when the initial balances are updated.
+   *
+   * @param {Balances} initialBalances - An object mapping addresses to their corresponding balances.
+   * @throws {Error} Throws an error if any address is invalid or any balance is not a positive `bigint`.
+   *
+   * @returns {void}
+   */
+  setInitialBalances(initialBalances) {
+    if (typeof initialBalances !== 'object' || initialBalances === null)
+      throw new Error('Initial balances must be an object.');
+
+    // Validate each address and balance
+    for (const [address, balance] of Object.entries(initialBalances)) {
+      // Validate address
+      if (typeof address !== 'string' || address.trim().length === 0)
+        throw new Error(`Invalid address: "${address}". Address must be a non-empty string.`);
+
+      // Validate balance (should be a positive bigint)
+      if (typeof balance !== 'bigint' || balance < 0n)
+        throw new Error(
+          `Invalid balance for address "${address}": expected a positive bigint, got "${typeof balance}".`,
+        );
+    }
+
+    // Set the new initial balances
+    this.initialBalances = initialBalances;
+
+    // Emit the event
+    this.#emit('InitialBalancesUpdated', this.initialBalances);
   }
 
   /**
@@ -968,6 +1009,23 @@ class TinyChainInstance {
    */
   getAllChainData() {
     return this.chain.map((block) => block.get());
+  }
+
+  /**
+   * Clears the entire blockchain.
+   *
+   * This method removes all blocks from the chain, effectively resetting the blockchain to an empty state.
+   * It also resets any other associated data, like balances and burned balances.
+   *
+   * @emits ChainCleared - Emitted when the blockchain is cleared.
+   *
+   * @returns {void}
+   */
+  cleanChain() {
+    this.chain = [];
+    this.balances = {};
+    this.#emit('ChainCleared');
+    this.startBalances();
   }
 
   /**
