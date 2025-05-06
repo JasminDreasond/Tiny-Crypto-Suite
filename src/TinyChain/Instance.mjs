@@ -209,16 +209,6 @@ class TinyChainInstance {
     );
   }
 
-  /**
-   * Tracks the total amount of balance that has been permanently burned.
-   *
-   * This value accumulates all tokens that were removed from circulation
-   * through burn mechanisms (e.g., excessive gas fees or manual burns).
-   *
-   * @type {bigint}
-   */
-  burnedBalance = BigInt(0);
-
   /** @type {TinyChainBlock[]} */
   chain = [];
 
@@ -588,7 +578,7 @@ class TinyChainInstance {
    *
    * @param {string} minerAddress - The address of the miner who is mining the block.
    * @param {TinyChainBlock} newBlock - The new block instance to be mined.
-   * 
+   *
    * @emits NewBlock - When the new block is added.
    *
    * @returns {Promise<TinyChainBlock>} A promise that resolves to the mined block once it has been added to the blockchain.
@@ -626,7 +616,7 @@ class TinyChainInstance {
    * - Append the validated block to the blockchain and emit the `NewBlock` event.
    *
    * @param {TinyChainBlock} minedBlock - The already mined block to be added to the blockchain.
-   * 
+   *
    * @emits NewBlock - When the new block is added.
    *
    * @returns {Promise<TinyChainBlock>} A promise that resolves to the block once it has been added.
@@ -697,7 +687,9 @@ class TinyChainInstance {
    * If the block includes a miner address, it adds the block reward and the gas collected to the miner's balance.
    *
    * @param {TinyChainBlock} block - The block whose balances need to be updated.
-   * 
+   * @param {Balances} [balances] - A mapping of addresses to their balances.
+   * @param {boolean} [emitEvents=true] - If you need to send events.
+   *
    * @emits BalanceStarted - For each address initialized when in currency mode.
    * @emits BalanceUpdated - For each address updated when in currency mode.
    * @emits Payload - For each payload executed when in payload mode.
@@ -713,7 +705,7 @@ class TinyChainInstance {
    *
    * @returns {void} This method does not return any value.
    */
-  updateBalance(block) {
+  updateBalance(block, balances = this.balances, emitEvents = true) {
     const reward = block.reward;
     const minerAddress = block.miner;
     if (typeof reward !== 'bigint')
@@ -748,7 +740,7 @@ class TinyChainInstance {
                 throw new Error(`Non-admins can only send their own balance.`);
 
               // @ts-ignore
-              if (typeof this.balances[from] !== 'bigint' || this.balances[from] < amount)
+              if (typeof balances[from] !== 'bigint' || balances[from] < amount)
                 throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
             }
           }
@@ -772,64 +764,67 @@ class TinyChainInstance {
           const gasUsed = data.gasUsed;
           const totalFee = gasUsed * gasPricePaid;
 
-          if (!this.balances[execAddress]) {
-            this.balances[execAddress] = 0n;
-            this.#emit('BalanceStarted', execAddress, this.balances[execAddress]);
+          if (!balances[execAddress]) {
+            balances[execAddress] = 0n;
+            if (emitEvents) this.#emit('BalanceStarted', execAddress, balances[execAddress]);
           }
-          const isSufficientBalance = this.balances[execAddress] >= totalFee ? true : false;
+          const isSufficientBalance = balances[execAddress] >= totalFee ? true : false;
 
           if (isSufficientBalance) {
             totalGasCollected += totalFee;
-            this.balances[execAddress] -= totalFee;
+            balances[execAddress] -= totalFee;
           } else {
-            totalGasCollected += this.balances[execAddress];
-            this.balances[execAddress] = 0n;
+            totalGasCollected += balances[execAddress];
+            balances[execAddress] = 0n;
           }
 
           if (isSufficientBalance) {
             for (const { from, to, amount } of transfers) {
-              if (!this.balances[from]) {
-                this.balances[from] = 0n;
-                this.#emit('BalanceStarted', from, this.balances[from]);
+              if (!balances[from]) {
+                balances[from] = 0n;
+                if (emitEvents) this.#emit('BalanceStarted', from, balances[from]);
               }
-              if (!this.balances[to]) {
-                this.balances[to] = 0n;
-                this.#emit('BalanceStarted', to, this.balances[to]);
+              if (!balances[to]) {
+                balances[to] = 0n;
+                if (emitEvents) this.#emit('BalanceStarted', to, balances[to]);
               }
               // @ts-ignore
-              this.balances[from] -= amount;
+              balances[from] -= amount;
               // @ts-ignore
-              this.balances[to] += amount;
+              balances[to] += amount;
             }
           }
 
-          this.#emit('BalanceUpdated', {
-            transfers,
-            address: execAddress,
-            isAdmin,
-            isSufficientBalance,
-            totalAmount,
-            totalFee,
-          });
+          if (emitEvents)
+            this.#emit('BalanceUpdated', {
+              transfers,
+              address: execAddress,
+              isAdmin,
+              isSufficientBalance,
+              totalAmount,
+              totalFee,
+            });
         }
 
-        if (this.payloadMode) this.#emit('Payload', execAddress, data.payload);
+        if (this.payloadMode && emitEvents) this.#emit('Payload', execAddress, data.payload);
       }
 
-      const existsMiner = typeof minerAddress === 'string' && minerAddress.length > 0;
-      if (existsMiner) {
-        if (!this.balances[minerAddress]) {
-          this.balances[minerAddress] = 0n;
-          this.#emit('BalanceStarted', minerAddress, this.balances[minerAddress]);
-        }
-        this.balances[minerAddress] += reward + totalGasCollected;
-      } else this.burnedBalance = reward + totalGasCollected;
+      const totalReward = reward + totalGasCollected;
+      const minerAddr =
+        typeof minerAddress === 'string' && minerAddress.length > 0 ? minerAddress : '0';
+      if (!balances[minerAddr]) {
+        balances[minerAddr] = 0n;
+        if (emitEvents) this.#emit('BalanceStarted', minerAddr, balances[minerAddr]);
+      }
+      balances[minerAddr] += totalReward;
 
-      this.#emit('MinerBalanceUpdated', {
-        totalGasCollected,
-        address: existsMiner ? minerAddress : null,
-        reward,
-      });
+      if (emitEvents)
+        this.#emit('MinerBalanceUpdated', {
+          totalGasCollected,
+          reward,
+          address: minerAddr,
+          totalReward,
+        });
     }
   }
 
@@ -840,12 +835,46 @@ class TinyChainInstance {
    * Only works when `currencyMode` is enabled.
    *
    * @returns {Balances} An object where each key is an address and the value is a `bigint` representing its balance.
+   *
+   * @throws {Error} Throws if `currencyMode` is disabled .
    */
   getBalances() {
+    if (!this.currencyMode) throw new Error('Currency mode must be enabled.');
     /** @type {Balances} */
     const result = {};
     for (const [addr, amount] of Object.entries(this.balances)) result[addr] = amount;
     return result;
+  }
+
+  /**
+   * Retrieves a snapshot of all balances as they were at a specific block index.
+   *
+   * This method reprocesses the blockchain from the genesis block up to (and including)
+   * the specified index, recalculating all balances based on transfers and gas usage.
+   *
+   * Only works when `currencyMode` is enabled. Throws if the index is out of bounds.
+   *
+   * @param {number} [startIndex=0] - The starting index of the block range.
+   * @param {number|null} [endIndex=null] - The ending index (inclusive); defaults to the last block.
+   *
+   * @returns {Balances} An object mapping each address to its `bigint` balance at the specified block.
+   *
+   * @throws {Error} Throws if `currencyMode` is disabled or if the index is invalid.
+   */
+  getBalancesAt(startIndex = 0, endIndex = null) {
+    if (!this.currencyMode && !this.payloadMode)
+      throw new Error('Currency mode or payload mode must be enabled.');
+    const end = endIndex !== null ? endIndex : this.chain.length - 1;
+    if (startIndex < 0 || end >= this.chain.length || startIndex > end)
+      throw new Error('Invalid startIndex or endIndex range.');
+
+    /** @type {Balances} */
+    const balances = {};
+
+    const chain = this.chain.slice(startIndex, end + 1);
+    for (const block of this.chain) this.updateBalance(block, balances, false);
+
+    return balances;
   }
 
   /**
@@ -854,9 +883,11 @@ class TinyChainInstance {
    * This value represents the sum of rewards and gas fees that were not claimed by any miner (i.e., blocks without a miner address).
    *
    * @returns {bigint} The total burned balance as a `bigint`.
+   *
+   * @throws {Error} Throws if `currencyMode` is disabled .
    */
   getBurnedBalance() {
-    return this.burnedBalance;
+    return this.getBalance('0');
   }
 
   /**
@@ -866,8 +897,11 @@ class TinyChainInstance {
    *
    * @param {string} address - The address whose balance should be retrieved.
    * @returns {bigint} The balance of the given address, or 0n if not found.
+   *
+   * @throws {Error} Throws if `currencyMode` is disabled.
    */
   getBalance(address) {
+    if (!this.currencyMode) throw new Error('Currency mode must be enabled.');
     if (typeof this.balances[address] === 'bigint') return this.balances[address];
     return 0n;
   }
@@ -956,7 +990,7 @@ class TinyChainInstance {
    * Imports and rebuilds a blockchain from serialized block data.
    *
    * After import, balances are recalculated and the new chain is validated.
-   * 
+   *
    * @emits ImportChain - When the new chain is imported.
    *
    * @param {string[]} chain - The array of serialized blocks to import.

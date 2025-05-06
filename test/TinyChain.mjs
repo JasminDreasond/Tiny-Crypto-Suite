@@ -114,6 +114,7 @@ const tinyChainSimulation = async () => {
   console.log('📊 Final Having balances:');
   for (const [user, balance] of Object.entries(chain.balances))
     console.log(`   - ${user}: ${balance}`);
+  console.log(`📊 Burned balance: ${chain.getBurnedBalance().toString()}`);
 
   console.log('🏁 Test completed!');
 };
