@@ -127,17 +127,33 @@ class TinyChainInstance {
   createGenesisBlock() {
     return this.#createBlockInstance({
       index: 0n,
-      timestamp: Date.now(),
-      address: '',
-      payload: 'Genesis Block',
       previousHash: '0',
+      data: [
+        {
+          timestamp: Date.now(),
+          address: '0',
+          payload: 'Genesis Block',
+          gasLimit: 0n,
+          gasUsed: 0n,
+          baseFeePerGas: 0n,
+          maxFeePerGas: 0n,
+          maxPriorityFeePerGas: 0n,
+          miner: null,
+          hash: null,
+        },
+      ],
     });
   }
 
   hasGenesisBlock() {
     if (this.chain.length === 0) return false;
     const firstBlock = this.chain[0];
-    return firstBlock.index === 0n && firstBlock.previousHash === '0' && firstBlock.address === '';
+    return (
+      firstBlock.index === 0n &&
+      firstBlock.previousHash === '0' &&
+      firstBlock[0] &&
+      firstBlock[0].address === '0'
+    );
   }
 
   burnedBalance = BigInt(0);
@@ -272,25 +288,31 @@ class TinyChainInstance {
     } = gasOptions;
 
     const gasUsed = this.currencyMode ? this.estimateGasUsed(transfers, payloadData) : 0n;
-    const effectiveGasPrice = this.currencyMode ? this.computeEffectiveGasPrice(maxPriorityFeePerGas, maxFeePerGas) : 0n;
+    const effectiveGasPrice = this.currencyMode
+      ? this.computeEffectiveGasPrice(maxPriorityFeePerGas, maxFeePerGas)
+      : 0n;
     const totalFeePaid = gasUsed * effectiveGasPrice;
 
     if (gasUsed > gasLimit)
       throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
 
     return this.#createBlockInstance({
-      address: execAddress,
-      payload: payloadData,
-      transfers,
+      data: [
+        {
+          transfers,
+          address: execAddress,
+          payload: payloadData,
+          gasLimit: this.currencyMode ? gasLimit : 0n,
+          gasUsed,
+          baseFeePerGas: this.currencyMode ? this.baseFeePerGas : 0n,
+          maxFeePerGas: this.currencyMode ? maxFeePerGas : 0n,
+          maxPriorityFeePerGas: this.currencyMode ? maxPriorityFeePerGas : 0n,
+          miner: null,
+          hash: null,
+        },
+      ],
       difficulty: this.difficulty,
       reward,
-      gasLimit: this.currencyMode ? gasLimit : 0n,
-      gasUsed,
-      baseFeePerGas: this.currencyMode ? this.baseFeePerGas : 0n,
-      maxFeePerGas: this.currencyMode ? maxFeePerGas : 0n,
-      maxPriorityFeePerGas: this.currencyMode ? maxPriorityFeePerGas : 0n,
-      effectiveGasPrice,
-      totalFeePaid,
     });
   }
 
@@ -342,92 +364,106 @@ class TinyChainInstance {
   }
 
   updateBalance(block) {
-    const transfers = block.transfers;
-    const execAddress = block.address;
     const reward = block.reward;
     const minerAddress = block.miner;
-
-    if (typeof execAddress !== 'string')
-      throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
-    if (execAddress.length < 1) return;
-
     if (typeof reward !== 'bigint')
       throw new Error(`Invalid reward: expected a BigInt, got "${typeof reward}"`);
+    if (typeof minerAddress !== 'string' && minerAddress !== null)
+      throw new Error(`Invalid minerAddress: expected a string or null, got "${typeof reward}"`);
 
-    const isAdmin = this.admins.has(execAddress);
-    if (Array.isArray(transfers)) {
-      for (const { from, to, amount } of transfers) {
-        if (typeof from !== 'string' || typeof to !== 'string' || from.length < 1 || to.length < 1)
-          throw new Error('Invalid from/to address!');
+    if (Array.isArray(block.data)) {
+      let totalGasCollected = 0n;
+      for (const data of block.data) {
+        const transfers = data.transfers;
+        const execAddress = data.address;
 
-        if (!isAdmin && from !== execAddress)
-          throw new Error(`Non-admins can only send their own balance.`);
+        if (typeof execAddress !== 'string')
+          throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
+        if (execAddress.length < 1) return;
 
-        if (this.balances[from] < amount)
-          throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
-      }
-    }
+        const isAdmin = this.admins.has(execAddress);
+        if (Array.isArray(transfers)) {
+          for (const { from, to, amount } of transfers) {
+            if (
+              typeof from !== 'string' ||
+              typeof to !== 'string' ||
+              from.length < 1 ||
+              to.length < 1
+            )
+              throw new Error('Invalid from/to address!');
 
-    let totalGasCollected = 0n;
-    let totalAmount = 0n;
+            if (!isAdmin && from !== execAddress)
+              throw new Error(`Non-admins can only send their own balance.`);
 
-    if (Array.isArray(transfers)) {
-      for (const tx of transfers) totalAmount += tx.amount;
-    }
-
-    const gasFee = block.totalFeePaid ?? 0n;
-    const totalCost = totalAmount + gasFee;
-
-    if (!this.balances[execAddress]) {
-      this.balances[execAddress] = 0n;
-      this.#emit('BalanceStarted', execAddress, this.balances[execAddress]);
-    }
-    const isSufficientBalance = this.balances[execAddress] > totalCost ? true : false;
-
-    if (isSufficientBalance) {
-      totalGasCollected += gasFee;
-      this.balances[execAddress] -= totalCost;
-    } else {
-      totalGasCollected += this.balances[execAddress];
-      this.balances[execAddress] = 0n;
-    }
-
-    if (isSufficientBalance) {
-      for (const { from, to, amount } of transfers) {
-        if (!this.balances[from]) {
-          this.balances[from] = 0n;
-          this.#emit('BalanceStarted', from, this.balances[from]);
+            if (this.balances[from] < amount)
+              throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
+          }
         }
-        if (!this.balances[to]) {
-          this.balances[to] = 0n;
-          this.#emit('BalanceStarted', to, this.balances[to]);
+
+        let totalAmount = 0n;
+
+        if (Array.isArray(transfers)) {
+          for (const tx of transfers) totalAmount += tx.amount;
         }
-        this.balances[from] -= amount;
-        this.balances[to] += amount;
+
+        const gasFee = data.totalFeePaid ?? 0n;
+        const totalCost = totalAmount + gasFee;
+
+        if (!this.balances[execAddress]) {
+          this.balances[execAddress] = 0n;
+          this.#emit('BalanceStarted', execAddress, this.balances[execAddress]);
+        }
+        const isSufficientBalance = this.balances[execAddress] > totalCost ? true : false;
+
+        if (isSufficientBalance) {
+          totalGasCollected += gasFee;
+          this.balances[execAddress] -= totalCost;
+        } else {
+          totalGasCollected += this.balances[execAddress];
+          this.balances[execAddress] = 0n;
+        }
+
+        if (isSufficientBalance) {
+          for (const { from, to, amount } of transfers) {
+            if (!this.balances[from]) {
+              this.balances[from] = 0n;
+              this.#emit('BalanceStarted', from, this.balances[from]);
+            }
+            if (!this.balances[to]) {
+              this.balances[to] = 0n;
+              this.#emit('BalanceStarted', to, this.balances[to]);
+            }
+            this.balances[from] -= amount;
+            this.balances[to] += amount;
+          }
+        }
+
+        this.#emit('BalanceUpdated', {
+          transfers,
+          address: execAddress,
+          isAdmin,
+          isSufficientBalance,
+          totalAmount,
+          gasFee,
+          totalCost,
+        });
       }
+
+      const existsMiner = typeof minerAddress === 'string' && minerAddress.length > 0;
+      if (existsMiner) {
+        if (!this.balances[minerAddress]) {
+          this.balances[minerAddress] = 0n;
+          this.#emit('BalanceStarted', minerAddress, this.balances[minerAddress]);
+        }
+        this.balances[minerAddress] += reward + totalGasCollected;
+      } else this.burnedBalance = reward + totalGasCollected;
+
+      this.#emit('MinerBalanceUpdated', {
+        totalGasCollected,
+        address: existsMiner ? minerAddress : null,
+        reward,
+      });
     }
-
-    const existsMiner = typeof minerAddress === 'string' && minerAddress.length > 0;
-    if (existsMiner) {
-      if (!this.balances[minerAddress]) {
-        this.balances[minerAddress] = 0n;
-        this.#emit('BalanceStarted', minerAddress, this.balances[minerAddress]);
-      }
-      this.balances[minerAddress] += reward + totalGasCollected;
-    } else this.burnedBalance = reward + totalGasCollected;
-
-    this.#emit('BalanceUpdated', {
-      transfers,
-      execAddress,
-      reward,
-      isAdmin,
-      isSufficientBalance,
-      totalGasCollected,
-      totalAmount,
-      gasFee,
-      totalCost,
-      minerAddress: existsMiner ? minerAddress : null,
-    });
   }
 
   getBalances(toString = true) {

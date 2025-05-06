@@ -1,40 +1,164 @@
 import { createHash } from 'crypto';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
+/**
+ * @namespace TinyChainBlock
+ */
+
+/**
+ * @typedef {Object} NewTransaction
+ * @property {string} from - The sender's address
+ * @property {string} to - The recipient's address
+ * @property {string | number | bigint} amount - The amount of the transaction
+ */
+
+/**
+ * @typedef {Object} Transaction
+ * @property {string} from - The sender's address
+ * @property {string} to - The recipient's address
+ * @property {bigint} amount - The amount of the transaction
+ */
+
+/**
+ * @typedef {Object} NewTransactionData
+ * @property {bigint | number | string} gasLimit - Max gas allowed for transactions.
+ * @property {bigint | number | string} gasUsed - Actual gas used.
+ * @property {bigint | number | string} baseFeePerGas - Base fee per gas unit.
+ * @property {bigint | number | string} maxPriorityFeePerGas - Priority fee paid to the miner.
+ * @property {bigint | number | string} maxFeePerGas - Max total fee per gas unit allowed.
+ * @property {string} address - Address that created the block.
+ * @property {*} payload= - Payload content (usually a string).
+ * @property {Array<NewTransaction>} transfers - Transfer list.
+ */
+
+/**
+ * @typedef {Object} TransactionData
+ * @property {bigint} gasLimit - Max gas allowed for transactions.
+ * @property {bigint} gasUsed - Actual gas used.
+ * @property {bigint} baseFeePerGas - Base fee per gas unit.
+ * @property {bigint} maxPriorityFeePerGas - Priority fee paid to the miner.
+ * @property {bigint} maxFeePerGas - Max total fee per gas unit allowed.
+ * @property {string} address - Address that created the block.
+ * @property {*} payload - Payload content (usually a string).
+ * @property {Array<NewTransaction>} transfers - Transfer list.
+ */
+
+/**
+ * Represents a single block within the TinyDataChain structure.
+ *
+ * A block stores a list of transaction data, gas metrics, and
+ * metadata used for validation and mining. It includes fields
+ * such as index, timestamp, nonce, miner address, and cryptographic
+ * hashes. It is designed to be immutable after mining and stores
+ * calculated fees used to incentivize miners.
+ *
+ * This class assumes values like `index`, `previousHash`, and `minerAddress`
+ * are externally controlled and trusted when mining or constructing blocks.
+ *
+ * @class
+ */
 class TinyChainBlock {
-  /**
-   * @typedef {Object} Transaction
-   * @property {string} from - The sender's address
-   * @property {string} to - The recipient's address
-   * @property {bigint} amount - The amount of the transaction
-   */
-
-  /**
-   * @typedef {Object} NewTransaction
-   * @property {string} from - The sender's address
-   * @property {string} to - The recipient's address
-   * @property {string | number | bigint} amount - The amount of the transaction
-   */
-
   /**
    * Important instance used to validate values.
    * @type {TinyCryptoParser}
    */
   #parser;
 
+  #payloadString = false;
+
   /**
    * Validates and sanitizes the list of transfers.
    * @param {Array<NewTransaction>|undefined} transfers
    * @returns {Array<Transaction>}
+   * @throws {Error} If any transfer is invalid or has invalid types.
    */
   #transferValidator(transfers) {
-    if (Array.isArray(transfers))
-      return transfers.map((t) => ({
-        from: String(t.from),
-        to: String(t.to),
-        amount: BigInt(t.amount),
-      }));
-    else return [];
+    if (transfers === undefined) return [];
+    if (!Array.isArray(transfers)) throw new Error('Transfers must be an array or undefined.');
+    return transfers.map((t, index) => {
+      if (typeof t !== 'object' || t === null)
+        throw new Error(`Transfer at index ${index} is not a valid object.`);
+      if (typeof t.from !== 'string')
+        throw new Error(`"from" in transfer at index ${index} must be a string.`);
+      if (typeof t.to !== 'string')
+        throw new Error(`"to" in transfer at index ${index} must be a string.`);
+      if (
+        typeof t.amount !== 'bigint' &&
+        !(typeof t.amount === 'string' && /^[0-9]+$/.test(t.amount))
+      )
+        throw new Error(
+          `"amount" in transfer at index ${index} must be a bigint or numeric string.`,
+        );
+      return {
+        from: t.from,
+        to: t.to,
+        amount: typeof t.amount === 'bigint' ? t.amount : BigInt(t.amount),
+      };
+    });
+  }
+
+  /**
+   * Validates and sanitizes the list of data.
+   * @param {Array<NewTransactionData>|undefined} data
+   * @returns {Array<TransactionData>}
+   */
+  #dataValidator(data) {
+    if (data === undefined) return [];
+    if (!Array.isArray(data)) throw new Error('Data must be an array or undefined.');
+    return data.map((t, index) => {
+      if (typeof t !== 'object' || t === null)
+        throw new Error(`Data entry at index ${index} must be a non-null object.`);
+
+      if (!('address' in t)) throw new Error(`Missing "address" in data entry at index ${index}.`);
+
+      if (typeof t.address !== 'string' || !t.address.trim())
+        throw new Error(`"address" in data entry at index ${index} must be a non-empty string.`);
+
+      if (!('payload' in t)) throw new Error(`Missing "payload" in data entry at index ${index}.`);
+
+      if (this.#payloadString && typeof t.payload !== 'string')
+        throw new Error(`"payload" in data entry at index ${index} must be a string.`);
+
+      /** @type {Array<string>} */
+      const bigintFields = [
+        'gasLimit',
+        'gasUsed',
+        'baseFeePerGas',
+        'maxFeePerGas',
+        'maxPriorityFeePerGas',
+      ];
+
+      for (const field of bigintFields) {
+        // @ts-ignore
+        const value = t[field];
+        if (typeof value !== 'bigint' && !(typeof value === 'string' && /^[0-9]+$/.test(value)))
+          throw new Error(
+            `"${field}" in data entry at index ${index} must be a bigint or numeric string.`,
+          );
+      }
+
+      const gasLimit = typeof t.gasLimit === 'bigint' ? t.gasLimit : BigInt(t.gasLimit);
+      const gasUsed = typeof t.gasUsed === 'bigint' ? t.gasUsed : BigInt(t.gasUsed);
+      const baseFeePerGas =
+        typeof t.baseFeePerGas === 'bigint' ? t.baseFeePerGas : BigInt(t.baseFeePerGas);
+      const maxFeePerGas =
+        typeof t.maxFeePerGas === 'bigint' ? t.maxFeePerGas : BigInt(t.maxFeePerGas);
+      const maxPriorityFeePerGas =
+        typeof t.maxPriorityFeePerGas === 'bigint'
+          ? t.maxPriorityFeePerGas
+          : BigInt(t.maxPriorityFeePerGas);
+
+      return {
+        transfers: this.#transferValidator(t.transfers),
+        address: t.address,
+        payload: this.#payloadString ? t.payload : undefined,
+        gasLimit,
+        gasUsed,
+        baseFeePerGas,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      };
+    });
   }
 
   /**
@@ -43,30 +167,21 @@ class TinyChainBlock {
    * @param {Object} [options={}] - Configuration object.
    * @param {boolean} [options.payloadString=true] - If true, payload must be a string.
    * @param {TinyCryptoParser} [options.parser] - Parser instance used for deep serialization.
-   * @param {number} [options.timestamp=Date.now()] - Unix timestamp of the block.
-   * @param {string} [options.address=''] - Address that created the block.
-   * @param {string} [options.payload=''] - Payload content (usually a string).
-   * @param {Array<NewTransaction>} [options.transfers=[]] - Transfer list.
    * @param {bigint | number | string} [options.index=0n] - Block index.
    * @param {string} [options.previousHash=''] - Hash of the previous block.
    * @param {bigint | number | string} [options.difficulty=1n] - Mining difficulty.
    * @param {bigint | number | string} [options.reward=0n] - Block reward.
    * @param {bigint | number | string} [options.nonce=0n] - Starting nonce.
+   * @param {number} [options.timestamp=Date.now()] - Unix timestamp of the block.
    * @param {string|null} [options.hash=null] - Optional precomputed hash.
    * @param {string|null} [options.miner=null] - Address of the miner.
-   * @param {bigint | number | string} [options.gasLimit=0n] - Max gas allowed for transactions.
-   * @param {bigint | number | string} [options.gasUsed=0n] - Actual gas used.
-   * @param {bigint | number | string} [options.baseFeePerGas=0n] - Base fee per gas unit.
-   * @param {bigint | number | string} [options.maxPriorityFeePerGas=0n] - Priority fee paid to the miner.
-   * @param {bigint | number | string} [options.maxFeePerGas=0n] - Max total fee per gas unit allowed.
+   * @param {NewTransactionData[]} [options.data=[]] - Block data.
    */
   constructor({
     payloadString = true,
     parser = new TinyCryptoParser(),
     timestamp = Date.now(),
-    address = '',
-    payload = '',
-    transfers = [],
+    data,
     index = 0n,
     previousHash = '',
     difficulty = 1n,
@@ -74,41 +189,43 @@ class TinyChainBlock {
     nonce = 0n,
     hash = null,
     miner = null,
-
-    // Gas fee structure
-    gasLimit = 0n,
-    gasUsed = 0n,
-    baseFeePerGas = 0n,
-    maxPriorityFeePerGas = 0n,
-    maxFeePerGas = 0n,
   } = {}) {
-    if (payloadString && typeof payload !== 'string')
-      throw new Error('The payload need to be a string.');
-    if (typeof address !== 'string') throw new Error('The address need to be a string.');
     if (typeof timestamp !== 'number') throw new Error('The timestamp need to be a number.');
-    this.transfers = this.#transferValidator(transfers);
-
+    if (typeof payloadString !== 'boolean') throw new Error('payloadString must be a boolean.');
+    this.#payloadString = payloadString;
+    if (typeof parser !== 'object' || parser === null || typeof parser.serializeDeep !== 'function')
+      throw new Error('parser must be an object with a serializeDeep() method.');
     this.#parser = parser;
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0)
+      throw new Error('timestamp must be a positive finite number.');
     this.timestamp = timestamp;
-    this.address = address;
-    this.payload = payload;
-    this.index = typeof index !== 'bigint' ? BigInt(index) : index;
-    this.previousHash = typeof previousHash === 'string' ? previousHash : null;
-    this.difficulty = typeof difficulty !== 'bigint' ? BigInt(difficulty) : difficulty;
-    this.nonce = typeof nonce !== 'bigint' ? BigInt(nonce) : nonce;
-    this.reward = typeof reward !== 'bigint' ? BigInt(reward) : reward;
+    if (typeof index !== 'bigint' && !(typeof index === 'string' && /^[0-9]+$/.test(index)))
+      throw new Error('index must be a bigint or a numeric string.');
+    this.index = typeof index === 'bigint' ? index : BigInt(index);
+    if (typeof previousHash !== 'string') throw new Error('previousHash must be a hash string.');
+    this.previousHash = previousHash;
+    if (
+      typeof difficulty !== 'bigint' &&
+      !(typeof difficulty === 'string' && /^[0-9]+$/.test(difficulty))
+    )
+      throw new Error('difficulty must be a bigint or a numeric string.');
+    this.difficulty = typeof difficulty === 'bigint' ? difficulty : BigInt(difficulty);
+    if (typeof nonce !== 'bigint' && !(typeof nonce === 'string' && /^[0-9]+$/.test(nonce)))
+      throw new Error('nonce must be a bigint or a numeric string.');
+    this.nonce = typeof nonce === 'bigint' ? nonce : BigInt(nonce);
+    if (typeof reward !== 'bigint' && !(typeof reward === 'string' && /^[0-9]+$/.test(reward)))
+      throw new Error('reward must be a bigint or a numeric string.');
+    this.reward = typeof reward === 'bigint' ? reward : BigInt(reward);
+
+    if (typeof miner !== 'string' && miner !== null)
+      throw new Error('miner must be a string or null.');
     this.miner = typeof miner === 'string' ? miner : null;
 
-    // Gas-related values
-    this.gasLimit = BigInt(gasLimit);
-    this.gasUsed = BigInt(gasUsed); // In real cases, you'd calculate this dynamically
-    this.baseFeePerGas = BigInt(baseFeePerGas);
-    this.maxPriorityFeePerGas = BigInt(maxPriorityFeePerGas);
-    this.maxFeePerGas = BigInt(maxFeePerGas);
+    this.data = this.#dataValidator(data);
+    if (this.data.length === 0) throw new Error('The block data cannot be empty.');
 
-    this.effectiveGasPrice = this.baseFeePerGas + this.maxPriorityFeePerGas;
-    this.totalFeePaid = this.effectiveGasPrice * this.gasUsed;
-
+    if (typeof hash !== 'string' && hash !== null)
+      throw new Error('hash must be a hash string or null.');
     this.hash = typeof hash !== 'string' ? this.calculateHash() : hash;
   }
 
@@ -117,46 +234,26 @@ class TinyChainBlock {
    * @returns {{
    *   index: bigint,
    *   timestamp: number,
-   *   address: string,
-   *   payload: string,
-   *   transfers: Transaction[],
+   *   data: TransactionData[],
    *   previousHash: string|null,
    *   difficulty: bigint,
    *   nonce: bigint,
    *   hash: string,
    *   reward: bigint,
    *   miner: string|null,
-   *   gasLimit: bigint,
-   *   gasUsed: bigint,
-   *   baseFeePerGas: bigint,
-   *   maxPriorityFeePerGas: bigint,
-   *   maxFeePerGas: bigint,
-   *   effectiveGasPrice: bigint,
-   *   totalFeePaid: bigint
    * }}
    */
   get() {
     return {
       index: this.index,
       timestamp: this.timestamp,
-      address: this.address,
-      payload: this.payload,
-      transfers: this.transfers,
+      data: this.data,
       previousHash: this.previousHash,
       difficulty: this.difficulty,
       nonce: this.nonce,
       hash: this.hash,
       reward: this.reward,
       miner: this.miner,
-
-      // Gas-related values
-      gasLimit: this.gasLimit,
-      gasUsed: this.gasUsed,
-      baseFeePerGas: this.baseFeePerGas,
-      maxPriorityFeePerGas: this.maxPriorityFeePerGas,
-      maxFeePerGas: this.maxFeePerGas,
-      effectiveGasPrice: this.effectiveGasPrice,
-      totalFeePaid: this.totalFeePaid,
     };
   }
 
@@ -174,22 +271,12 @@ class TinyChainBlock {
    * @returns {string}
    */
   calculateHash() {
-    const data = {
-      payload: this.payload,
-      transfers: this.transfers,
-    };
-
     let value = '';
-    value += this.address;
     value += this.timestamp;
     value += this.previousHash;
-    value += this.#parser.serializeDeep(data);
+    value += this.#parser.serializeDeep(this.data);
     value += this.index.toString();
     value += this.nonce.toString();
-    value += this.gasLimit.toString();
-    value += this.gasUsed.toString();
-    value += this.baseFeePerGas.toString();
-    value += this.maxPriorityFeePerGas.toString();
     return createHash('sha256').update(value).digest('hex');
   }
 
@@ -263,14 +350,6 @@ class TinyChainBlock {
   }
 
   /**
-   * Returns the validated transfer list.
-   * @returns {Transaction[]}
-   */
-  getTransfers() {
-    return this.transfers;
-  }
-
-  /**
    * Returns the parser instance used for hashing and serialization.
    * @returns {TinyCryptoParser}
    */
@@ -284,22 +363,6 @@ class TinyChainBlock {
    */
   getTimestamp() {
     return this.timestamp;
-  }
-
-  /**
-   * Returns the address that created the block.
-   * @returns {string}
-   */
-  getAddress() {
-    return this.address;
-  }
-
-  /**
-   * Returns the data payload stored in the block.
-   * @returns {string}
-   */
-  getPayload() {
-    return this.payload;
   }
 
   /**
@@ -351,59 +414,11 @@ class TinyChainBlock {
   }
 
   /**
-   * Returns the gas limit assigned to this block.
-   * @returns {bigint}
+   * Returns the block data.
+   * @returns {TransactionData[]}
    */
-  getGasLimit() {
-    return this.gasLimit;
-  }
-
-  /**
-   * Returns the amount of gas used during execution.
-   * @returns {bigint}
-   */
-  getGasUsed() {
-    return this.gasUsed;
-  }
-
-  /**
-   * Returns the base fee per gas unit.
-   * @returns {bigint}
-   */
-  getBaseFeePerGas() {
-    return this.baseFeePerGas;
-  }
-
-  /**
-   * Returns the maximum priority fee per gas unit.
-   * @returns {bigint}
-   */
-  getMaxPriorityFeePerGas() {
-    return this.maxPriorityFeePerGas;
-  }
-
-  /**
-   * Returns the maximum total fee per gas unit.
-   * @returns {bigint}
-   */
-  getMaxFeePerGas() {
-    return this.maxFeePerGas;
-  }
-
-  /**
-   * Returns the effective gas price (base fee + priority fee).
-   * @returns {bigint}
-   */
-  getEffectiveGasPrice() {
-    return this.effectiveGasPrice;
-  }
-
-  /**
-   * Returns the total fee paid (effective price * gas used).
-   * @returns {bigint}
-   */
-  getTotalFeePaid() {
-    return this.totalFeePaid;
+  getData() {
+    return this.data;
   }
 
   /**
