@@ -28,7 +28,7 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  * @property {bigint | number | string} maxPriorityFeePerGas - Priority fee paid to the miner.
  * @property {bigint | number | string} maxFeePerGas - Max total fee per gas unit allowed.
  * @property {string} address - Address that created the block.
- * @property {*} payload= - Payload content (usually a string).
+ * @property {*} payload - Payload content (usually a string).
  * @property {Array<NewTransaction>} transfers - Transfer list.
  */
 

@@ -166,6 +166,7 @@ class TinyChainInstance {
     difficulty = 1,
     payloadString = true,
     currencyMode = false,
+    payloadMode = false,
     initialReward = 15000000000000000000,
     halvingInterval = 100,
     lastBlockReward = 1000,
@@ -175,6 +176,7 @@ class TinyChainInstance {
     this.#payloadString = payloadString;
     this.admins = new Set(admins);
     this.currencyMode = currencyMode;
+    this.payloadMode = payloadMode;
 
     this.transferGas = BigInt(transferGas);
     this.baseFeePerGas = BigInt(baseFeePerGas); // initial base value Fee in gwei
@@ -329,24 +331,21 @@ class TinyChainInstance {
     });
   }
 
-  #insertNewBlock(newBlock) {
-    if (this.currencyMode) this.updateBalance(newBlock);
-    this.chain.push(newBlock);
-  }
-
-  #getPrevsBlockData() {
-    const previousBlock = this.getLatestBlock();
-    return { previousHash: previousBlock.hash, index: previousBlock.index + 1n };
-  }
-
   mineBlock(minerAddress, newBlock) {
     return this.#queue.enqueue(async () => {
       const mineNow = async () => {
-        const result = await newBlock.mine(minerAddress, this.#getPrevsBlockData());
+        const previousBlock = this.getLatestBlock();
+        const result = await newBlock.mine(minerAddress, {
+          previousHash: previousBlock.hash,
+          index: previousBlock.index + 1n,
+        });
+
         if (!result.success) throw new Error('Block mining failed');
         const isValid = this.isValidNewBlock(newBlock);
         if (!isValid) throw new Error('Block mining invalid');
-        this.#insertNewBlock(newBlock);
+
+        if (this.currencyMode || this.payloadMode) this.updateBalance(newBlock);
+        this.chain.push(newBlock);
         this.#emit('NewBlock', newBlock);
         return newBlock;
       };
@@ -386,88 +385,90 @@ class TinyChainInstance {
     if (Array.isArray(block.data)) {
       let totalGasCollected = 0n;
       for (const data of block.data) {
-        const transfers = data.transfers;
         const execAddress = data.address;
-
         if (typeof execAddress !== 'string')
           throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
         if (execAddress.length < 1) return;
 
-        const isAdmin = this.admins.has(execAddress);
-        if (Array.isArray(transfers)) {
-          for (const { from, to, amount } of transfers) {
-            if (
-              typeof from !== 'string' ||
-              typeof to !== 'string' ||
-              from.length < 1 ||
-              to.length < 1
-            )
-              throw new Error('Invalid from/to address!');
+        if (this.currencyMode) {
+          const transfers = data.transfers;
+          const isAdmin = this.admins.has(execAddress);
+          if (Array.isArray(transfers)) {
+            for (const { from, to, amount } of transfers) {
+              if (
+                typeof from !== 'string' ||
+                typeof to !== 'string' ||
+                from.length < 1 ||
+                to.length < 1
+              )
+                throw new Error('Invalid from/to address!');
 
-            if (!isAdmin && from !== execAddress)
-              throw new Error(`Non-admins can only send their own balance.`);
+              if (!isAdmin && from !== execAddress)
+                throw new Error(`Non-admins can only send their own balance.`);
 
-            if (this.balances[from] < amount)
-              throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
-          }
-        }
-
-        let totalAmount = 0n;
-
-        if (Array.isArray(transfers)) for (const tx of transfers) totalAmount += tx.amount;
-
-        if (data.gasUsed > data.gasLimit)
-          throw new Error(
-            `Gas limit exceeded: used ${data.gasUsed} > limit ${data.gasLimit} for sender "${execAddress}"`,
-          );
-
-        const baseFeePerGas = data.baseFeePerGas;
-        const maxPriorityFeePerGas = data.maxPriorityFeePerGas;
-        const maxFeePerGas = data.maxFeePerGas; // user sets this
-
-        const effectiveGasPrice = baseFeePerGas + maxPriorityFeePerGas;
-        const gasPricePaid = effectiveGasPrice > maxFeePerGas ? maxFeePerGas : effectiveGasPrice;
-
-        const gasUsed = data.gasUsed;
-        const totalFee = gasUsed * gasPricePaid;
-
-        if (!this.balances[execAddress]) {
-          this.balances[execAddress] = 0n;
-          this.#emit('BalanceStarted', execAddress, this.balances[execAddress]);
-        }
-        const isSufficientBalance = this.balances[execAddress] >= totalFee ? true : false;
-
-        if (isSufficientBalance) {
-          totalGasCollected += totalFee;
-          this.balances[execAddress] -= totalFee;
-        } else {
-          totalGasCollected += this.balances[execAddress];
-          this.balances[execAddress] = 0n;
-        }
-
-        if (isSufficientBalance) {
-          for (const { from, to, amount } of transfers) {
-            if (!this.balances[from]) {
-              this.balances[from] = 0n;
-              this.#emit('BalanceStarted', from, this.balances[from]);
+              if (this.balances[from] < amount)
+                throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
             }
-            if (!this.balances[to]) {
-              this.balances[to] = 0n;
-              this.#emit('BalanceStarted', to, this.balances[to]);
-            }
-            this.balances[from] -= amount;
-            this.balances[to] += amount;
           }
+
+          let totalAmount = 0n;
+          if (Array.isArray(transfers)) for (const tx of transfers) totalAmount += tx.amount;
+
+          if (data.gasUsed > data.gasLimit)
+            throw new Error(
+              `Gas limit exceeded: used ${data.gasUsed} > limit ${data.gasLimit} for sender "${execAddress}"`,
+            );
+
+          const baseFeePerGas = data.baseFeePerGas;
+          const maxPriorityFeePerGas = data.maxPriorityFeePerGas;
+          const maxFeePerGas = data.maxFeePerGas; // user sets this
+
+          const effectiveGasPrice = baseFeePerGas + maxPriorityFeePerGas;
+          const gasPricePaid = effectiveGasPrice > maxFeePerGas ? maxFeePerGas : effectiveGasPrice;
+
+          const gasUsed = data.gasUsed;
+          const totalFee = gasUsed * gasPricePaid;
+
+          if (!this.balances[execAddress]) {
+            this.balances[execAddress] = 0n;
+            this.#emit('BalanceStarted', execAddress, this.balances[execAddress]);
+          }
+          const isSufficientBalance = this.balances[execAddress] >= totalFee ? true : false;
+
+          if (isSufficientBalance) {
+            totalGasCollected += totalFee;
+            this.balances[execAddress] -= totalFee;
+          } else {
+            totalGasCollected += this.balances[execAddress];
+            this.balances[execAddress] = 0n;
+          }
+
+          if (isSufficientBalance) {
+            for (const { from, to, amount } of transfers) {
+              if (!this.balances[from]) {
+                this.balances[from] = 0n;
+                this.#emit('BalanceStarted', from, this.balances[from]);
+              }
+              if (!this.balances[to]) {
+                this.balances[to] = 0n;
+                this.#emit('BalanceStarted', to, this.balances[to]);
+              }
+              this.balances[from] -= amount;
+              this.balances[to] += amount;
+            }
+          }
+
+          this.#emit('BalanceUpdated', {
+            transfers,
+            address: execAddress,
+            isAdmin,
+            isSufficientBalance,
+            totalAmount,
+            totalFee,
+          });
         }
 
-        this.#emit('BalanceUpdated', {
-          transfers,
-          address: execAddress,
-          isAdmin,
-          isSufficientBalance,
-          totalAmount,
-          totalFee,
-        });
+        if (this.payloadMode) this.#emit('Payload', execAddress, data.payload);
       }
 
       const existsMiner = typeof minerAddress === 'string' && minerAddress.length > 0;
@@ -507,7 +508,8 @@ class TinyChainInstance {
 
   recalculateBalances() {
     this.startBalances();
-    if (this.currencyMode) for (const block of this.chain) this.updateBalance(block);
+    if (this.currencyMode || this.payloadMode)
+      for (const block of this.chain) this.updateBalance(block);
     this.#emit('BalanceRecalculated', this.balances);
   }
 
@@ -613,6 +615,14 @@ class TinyChainInstance {
    */
   isCurrencyMode() {
     return this.currencyMode;
+  }
+
+  /**
+   * Returns true if the blockchain is in payload mode.
+   * @returns {boolean}
+   */
+  isPayloadMode() {
+    return this.payloadMode;
   }
 
   /**
