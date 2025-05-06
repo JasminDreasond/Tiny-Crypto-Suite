@@ -45,6 +45,11 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  */
 
 /**
+ * @typedef {Record.<string, number>} TxIndexMap
+ * A map where each key is a transaction index (as a string) and the value is the transaction ID (string or number).
+ */
+
+/**
  * Represents a single block within the TinyDataChain structure.
  *
  * A block stores a list of transaction data, gas metrics, and
@@ -164,6 +169,29 @@ class TinyChainBlock {
   }
 
   /**
+   * Validates and sanitizes a transaction index object.
+   * Ensures all keys are valid numeric indices and values are valid transaction IDs.
+   *
+   * @param {object|undefined} txIndexObject
+   * @returns {TxIndexMap}
+   * @throws {Error} If keys are not valid numeric indices or values are invalid.
+   */
+  #validateTxIndexObject(txIndexObject) {
+    if (txIndexObject === undefined) return {};
+    if (typeof txIndexObject !== 'object' || txIndexObject === null || Array.isArray(txIndexObject))
+      throw new Error('Transaction index must be a plain object.');
+
+    /** @type {TxIndexMap} */
+    const result = {};
+    for (const [key, value] of Object.entries(txIndexObject)) {
+      if (typeof key !== 'string')
+        throw new Error(`Invalid transaction index key "${key}": must be a string.`);
+      result[key] = value;
+    }
+    return result;
+  }
+
+  /**
    * Creates a new instance of a block with all necessary data and gas configuration.
    *
    * @param {Object} [options={}] - Configuration object.
@@ -174,6 +202,7 @@ class TinyChainBlock {
    * @param {bigint | number | string} [options.difficulty=1n] - Mining difficulty.
    * @param {bigint | number | string} [options.reward=0n] - Block reward.
    * @param {bigint | number | string} [options.nonce=0n] - Starting nonce.
+   * @param {TxIndexMap} [options.txs] - A map where each key is a transaction index.
    * @param {number} [options.timestamp=Date.now()] - Unix timestamp of the block.
    * @param {string|null} [options.hash=null] - Optional precomputed hash.
    * @param {string|null} [options.miner=null] - Address of the miner.
@@ -183,6 +212,7 @@ class TinyChainBlock {
     payloadString = true,
     parser = new TinyCryptoParser(),
     timestamp = Date.now(),
+    txs,
     data,
     index = 0n,
     previousHash = '',
@@ -225,6 +255,7 @@ class TinyChainBlock {
 
     this.data = this.#dataValidator(data);
     if (this.data.length === 0) throw new Error('The block data cannot be empty.');
+    this.txs = this.#validateTxIndexObject(txs);
 
     if (typeof hash !== 'string' && hash !== null)
       throw new Error('hash must be a hash string or null.');
@@ -253,6 +284,7 @@ class TinyChainBlock {
    *   hash: string,
    *   reward: bigint,
    *   miner: string|null,
+   *   txs: TxIndexMap,
    * }}
    */
   get() {
@@ -266,6 +298,7 @@ class TinyChainBlock {
       hash: this.hash,
       reward: this.reward,
       miner: this.miner,
+      txs: this.txs,
     };
   }
 
@@ -290,6 +323,25 @@ class TinyChainBlock {
     value += this.index.toString();
     value += this.nonce.toString();
     return createHash('sha256').update(Buffer.from(value, 'utf-8')).digest('hex');
+  }
+
+  /**
+   * Generates a unique transaction ID (TX ID) based on its contents.
+   *
+   * @param {number} index
+   * @returns {string} SHA256 hash as the TX ID
+   * @throws {Error} If this.data is not an array
+   * @throws {Error} If the index is out of bounds
+   */
+  generateTxId(index) {
+    if (!Array.isArray(this.data)) throw new Error('Invalid data: this.data must be an array.');
+    if (typeof index !== 'number') throw new Error(`Invalid index: must be a number.`);
+    const data = this.data[index];
+    if (typeof data !== 'object')
+      throw new Error(`Invalid index: must be a number between 0 and ${this.data.length - 1}.`);
+    return createHash('sha256')
+      .update(Buffer.from(this.#parser.serializeDeep(this.data[index]), 'utf-8'))
+      .digest('hex');
   }
 
   /**
@@ -328,6 +380,16 @@ class TinyChainBlock {
           const hashrate = (attempts / elapsedSeconds).toFixed(2);
           if (typeof onComplete === 'function') onComplete(parseFloat(hashrate));
           if (minerAddress) this.miner = minerAddress;
+
+          this.txs = {};
+          if (Array.isArray(this.data)) {
+            for (const dataIndex in this.data) {
+              const index = Number(dataIndex);
+              const tx = this.generateTxId(index);
+              this.txs[tx] = index;
+            }
+          }
+
           return { nonce: this.nonce, hash: this.hash, success: true };
         }
       }
@@ -345,6 +407,18 @@ class TinyChainBlock {
     };
 
     return mineStep();
+  }
+
+  /**
+   * Returns a validated view of the internal transaction index map.
+   *
+   * @returns {TxIndexMap}
+   * @throws {Error} If internal txs object is invalid.
+   */
+  getTxs() {
+    if (typeof this.txs !== 'object' || this.txs === null || Array.isArray(this.txs))
+      throw new Error('Transaction tx list must be a plain object.');
+    return this.txs;
   }
 
   /**

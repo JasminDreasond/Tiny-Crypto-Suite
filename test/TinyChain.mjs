@@ -6,6 +6,7 @@ const tinyChainSimulation = async () => {
 
   const chainCfg = {
     currencyMode: true,
+    payloadMode: true,
     difficulty: 1,
     admins: ['adminUser'],
     initialBalances: {
