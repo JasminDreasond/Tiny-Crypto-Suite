@@ -107,10 +107,13 @@ class TinyChainBlock {
         throw new Error(
           `"amount" in transfer at index ${index} must be a bigint or numeric string.`,
         );
+      const amount = typeof t.amount === 'bigint' ? t.amount : BigInt(t.amount);
+      if (amount <= 0) 
+        throw new Error(`"amount" in transfer at index ${index} must be a positive integer.`);
       return {
         from: t.from,
         to: t.to,
-        amount: typeof t.amount === 'bigint' ? t.amount : BigInt(t.amount),
+        amount: amount,
       };
     });
   }
