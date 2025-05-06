@@ -1,4 +1,5 @@
 import { TinyChain } from '../dist/index.mjs';
+import { colorSafeStringify } from './colorSafeStringify.mjs';
 
 const tinyChainSimulation = async () => {
   console.log('🌱 Initializing test datachain...');
@@ -74,7 +75,7 @@ const tinyChainSimulation = async () => {
 
   // Verificar dados
   console.log('📊 Final data:');
-  console.log(chain.getAllChainData());
+  console.log(colorSafeStringify(chain.getAllChainData()));
 
   // Verifica balances
   console.log('📊 Final balances:');
@@ -92,7 +93,7 @@ const tinyChainSimulation = async () => {
     console.log(`   - ${user}: ${balance}`);
 
   console.log('📊 Imported data:');
-  console.log(newChain.getAllChainData());
+  console.log(colorSafeStringify(newChain.getAllChainData()));
 
   // Validar range
   const isValid = newChain.isValid(1, 2);

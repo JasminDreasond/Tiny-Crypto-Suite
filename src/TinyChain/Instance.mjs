@@ -237,19 +237,6 @@ class TinyChainInstance {
     return dataGas + transfersGas;
   }
 
-  /**
-   * Compute effective gas price from baseFee and tip.
-   * @param {bigint} baseFeePerGas
-   * @param {bigint} maxPriorityFeePerGas
-   * @param {bigint} maxFeePerGas
-   * @returns {bigint}
-   */
-  computeEffectiveGasPrice(maxPriorityFeePerGas, maxFeePerGas) {
-    const tip = maxPriorityFeePerGas;
-    const price = this.baseFeePerGas + tip;
-    return price > maxFeePerGas ? maxFeePerGas : price;
-  }
-
   isValid(startIndex = 0, endIndex = null) {
     const end = endIndex ?? this.chain.length - 1;
 
@@ -288,11 +275,6 @@ class TinyChainInstance {
     } = gasOptions;
 
     const gasUsed = this.currencyMode ? this.estimateGasUsed(transfers, payloadData) : 0n;
-    const effectiveGasPrice = this.currencyMode
-      ? this.computeEffectiveGasPrice(maxPriorityFeePerGas, maxFeePerGas)
-      : 0n;
-    const totalFeePaid = gasUsed * effectiveGasPrice;
-
     if (gasUsed > gasLimit)
       throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
 
@@ -369,7 +351,9 @@ class TinyChainInstance {
     if (typeof reward !== 'bigint')
       throw new Error(`Invalid reward: expected a BigInt, got "${typeof reward}"`);
     if (typeof minerAddress !== 'string' && minerAddress !== null)
-      throw new Error(`Invalid minerAddress: expected a string or null, got "${typeof reward}"`);
+      throw new Error(
+        `Invalid minerAddress: expected a string or null, got "${typeof minerAddress}"`,
+      );
 
     if (Array.isArray(block.data)) {
       let totalGasCollected = 0n;
@@ -402,22 +386,32 @@ class TinyChainInstance {
 
         let totalAmount = 0n;
 
-        if (Array.isArray(transfers)) {
-          for (const tx of transfers) totalAmount += tx.amount;
-        }
+        if (Array.isArray(transfers)) for (const tx of transfers) totalAmount += tx.amount;
 
-        const gasFee = data.totalFeePaid ?? 0n;
-        const totalCost = totalAmount + gasFee;
+        if (data.gasUsed > data.gasLimit)
+          throw new Error(
+            `Gas limit exceeded: used ${data.gasUsed} > limit ${data.gasLimit} for sender "${execAddress}"`,
+          );
+
+        const baseFeePerGas = data.baseFeePerGas;
+        const maxPriorityFeePerGas = data.maxPriorityFeePerGas;
+        const maxFeePerGas = data.maxFeePerGas; // user sets this
+
+        const effectiveGasPrice = baseFeePerGas + maxPriorityFeePerGas;
+        const gasPricePaid = effectiveGasPrice > maxFeePerGas ? maxFeePerGas : effectiveGasPrice;
+
+        const gasUsed = data.gasUsed;
+        const totalFee = gasUsed * gasPricePaid;
 
         if (!this.balances[execAddress]) {
           this.balances[execAddress] = 0n;
           this.#emit('BalanceStarted', execAddress, this.balances[execAddress]);
         }
-        const isSufficientBalance = this.balances[execAddress] > totalCost ? true : false;
+        const isSufficientBalance = this.balances[execAddress] >= totalFee ? true : false;
 
         if (isSufficientBalance) {
-          totalGasCollected += gasFee;
-          this.balances[execAddress] -= totalCost;
+          totalGasCollected += totalFee;
+          this.balances[execAddress] -= totalFee;
         } else {
           totalGasCollected += this.balances[execAddress];
           this.balances[execAddress] = 0n;
@@ -444,8 +438,7 @@ class TinyChainInstance {
           isAdmin,
           isSufficientBalance,
           totalAmount,
-          gasFee,
-          totalCost,
+          totalFee,
         });
       }
 
