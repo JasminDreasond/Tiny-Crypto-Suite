@@ -1,4 +1,5 @@
 import TinyChainBlock from './Block.mjs';
+import TinyChainEvents from './Events.mjs';
 import TinyChainInstance from './Instance.mjs';
 
 /**
@@ -13,6 +14,7 @@ import TinyChainInstance from './Instance.mjs';
 class TinyChain {
   static Instance = TinyChainInstance;
   static Block = TinyChainBlock;
+  static Events = TinyChainEvents;
 
   /**
    * This constructor is intentionally blocked.

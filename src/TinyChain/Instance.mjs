@@ -1,10 +1,105 @@
 // @ts-nocheck
 import { TinyPromiseQueue } from 'tiny-essentials';
+import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
 import TinyChainBlock from './Block.mjs';
 
 class TinyChainInstance {
+  /**
+   * Important instance used to make event emitter.
+   * @type {EventEmitter}
+   */
+  #events = new EventEmitter();
+
+  /**
+   * Emits an event with optional arguments to all system emit.
+   * @param {string | symbol} event - The name of the event to emit.
+   * @param {...any} args - Arguments passed to event listeners.
+   */
+  #emit(event, ...args) {
+    this.#events.emit(event, ...args);
+  }
+
+  /**
+   * @typedef {(...args: any[]) => void} ListenerCallback
+   * A generic callback function used for event listeners.
+   */
+
+  /**
+   * Sets the maximum number of listeners for the internal event emitter.
+   *
+   * @param {number} max - The maximum number of listeners allowed.
+   */
+  setMaxListeners(max) {
+    this.#events.setMaxListeners(max);
+  }
+
+  /**
+   * Emits an event with optional arguments.
+   * @param {string | symbol} event - The name of the event to emit.
+   * @param {...any} args - Arguments passed to event listeners.
+   * @returns {boolean} `true` if the event had listeners, `false` otherwise.
+   */
+  emit(event, ...args) {
+    return this.#events.emit(event, ...args);
+  }
+
+  /**
+   * Registers a listener for the specified event.
+   * @param {string | symbol} event - The name of the event to listen for.
+   * @param {ListenerCallback} listener - The callback function to invoke.
+   * @returns {this} The current class instance (for chaining).
+   */
+  on(event, listener) {
+    this.#events.on(event, listener);
+    return this;
+  }
+
+  /**
+   * Registers a one-time listener for the specified event.
+   * @param {string | symbol} event - The name of the event to listen for once.
+   * @param {ListenerCallback} listener - The callback function to invoke.
+   * @returns {this} The current class instance (for chaining).
+   */
+  once(event, listener) {
+    this.#events.once(event, listener);
+    return this;
+  }
+
+  /**
+   * Removes a listener from the specified event.
+   * @param {string | symbol} event - The name of the event.
+   * @param {ListenerCallback} listener - The listener to remove.
+   * @returns {this} The current class instance (for chaining).
+   */
+  off(event, listener) {
+    this.#events.off(event, listener);
+    return this;
+  }
+
+  /**
+   * Alias for `on`.
+   * @param {string | symbol} event - The name of the event.
+   * @param {ListenerCallback} listener - The callback to register.
+   * @returns {this} The current class instance (for chaining).
+   */
+  addListener(event, listener) {
+    this.#events.addListener(event, listener);
+    return this;
+  }
+
+  /**
+   * Alias for `off`.
+   * @param {string | symbol} event - The name of the event.
+   * @param {ListenerCallback} listener - The listener to remove.
+   * @returns {this} The current class instance (for chaining).
+   */
+  removeListener(event, listener) {
+    this.#events.removeListener(event, listener);
+    return this;
+  }
+
   /**
    * Important instance used to make request queue.
    * @type {TinyPromiseQueue}
@@ -57,6 +152,7 @@ class TinyChainInstance {
     currencyMode = false,
     initialReward = 15000000000000000000,
     halvingInterval = 100,
+    lastBlockReward = 1000,
     initialBalances = {},
     admins = [],
   } = {}) {
@@ -70,6 +166,7 @@ class TinyChainInstance {
     this.difficulty = BigInt(difficulty);
     this.initialReward = BigInt(initialReward);
     this.halvingInterval = BigInt(halvingInterval);
+    this.lastBlockReward = BigInt(lastBlockReward);
 
     if (currencyMode) this.initialBalances = initialBalances;
     this.startBalances();
@@ -153,7 +250,8 @@ class TinyChainInstance {
   }
 
   getCurrentReward() {
-    const height = BigInt(this.chain.length);
+    const height = this.getChainLength();
+    if (height > this.lastBlockReward) return 0n;
     const halvings = height / this.halvingInterval;
     const reward = this.initialReward / 2n ** halvings;
     return reward > 0n ? reward : 0n;
@@ -166,15 +264,15 @@ class TinyChainInstance {
     if (execAddress.trim().length === 0)
       throw new Error('Invalid address: address string cannot be empty or only whitespace');
 
-    const reward = this.getCurrentReward();
+    const reward = this.currencyMode ? this.getCurrentReward() : 0n;
     const {
       gasLimit = 50000n,
       maxFeePerGas = 200n,
       maxPriorityFeePerGas = this.priorityFeeDefault,
     } = gasOptions;
 
-    const gasUsed = this.estimateGasUsed(transfers, payloadData);
-    const effectiveGasPrice = this.computeEffectiveGasPrice(maxPriorityFeePerGas, maxFeePerGas);
+    const gasUsed = this.currencyMode ? this.estimateGasUsed(transfers, payloadData) : 0n;
+    const effectiveGasPrice = this.currencyMode ? this.computeEffectiveGasPrice(maxPriorityFeePerGas, maxFeePerGas) : 0n;
     const totalFeePaid = gasUsed * effectiveGasPrice;
 
     if (gasUsed > gasLimit)
@@ -186,11 +284,11 @@ class TinyChainInstance {
       transfers,
       difficulty: this.difficulty,
       reward,
-      gasLimit,
+      gasLimit: this.currencyMode ? gasLimit : 0n,
       gasUsed,
-      baseFeePerGas: this.baseFeePerGas,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
+      baseFeePerGas: this.currencyMode ? this.baseFeePerGas : 0n,
+      maxFeePerGas: this.currencyMode ? maxFeePerGas : 0n,
+      maxPriorityFeePerGas: this.currencyMode ? maxPriorityFeePerGas : 0n,
       effectiveGasPrice,
       totalFeePaid,
     });
@@ -210,6 +308,7 @@ class TinyChainInstance {
     return this.#queue.enqueue(async () => {
       newBlock.mineBlock(minerAddress, this.#getPrevsBlockData());
       this.#insertNewBlock(newBlock);
+      this.#emit('NewBlock', newBlock);
       return newBlock;
     });
   }
@@ -218,8 +317,13 @@ class TinyChainInstance {
     return this.#queue.enqueue(async () => {
       await newBlock.mineBlockAsync(minerAddress, this.#getPrevsBlockData());
       this.#insertNewBlock(newBlock);
+      this.#emit('NewBlock', newBlock);
       return newBlock;
     });
+  }
+
+  getFirstBlock() {
+    return this.getChainValue(0);
   }
 
   getLatestBlock() {
@@ -228,9 +332,13 @@ class TinyChainInstance {
 
   startBalances() {
     this.balances = {};
-    if (this.currencyMode)
-      for (const [user, balance] of Object.entries(this.initialBalances))
-        this.balances[user] = BigInt(balance);
+    this.#emit('BalancesInitialized', this.balances);
+    if (this.currencyMode) {
+      for (const [address, balance] of Object.entries(this.initialBalances)) {
+        this.balances[address] = BigInt(balance);
+        this.#emit('BalanceStarted', address, this.balances[address]);
+      }
+    }
   }
 
   updateBalance(block) {
@@ -270,7 +378,10 @@ class TinyChainInstance {
     const gasFee = block.totalFeePaid ?? 0n;
     const totalCost = totalAmount + gasFee;
 
-    if (!this.balances[execAddress]) this.balances[execAddress] = 0n;
+    if (!this.balances[execAddress]) {
+      this.balances[execAddress] = 0n;
+      this.#emit('BalanceStarted', execAddress, this.balances[execAddress]);
+    }
     const isSufficientBalance = this.balances[execAddress] > totalCost ? true : false;
 
     if (isSufficientBalance) {
@@ -283,19 +394,40 @@ class TinyChainInstance {
 
     if (isSufficientBalance) {
       for (const { from, to, amount } of transfers) {
-        if (!this.balances[from]) this.balances[from] = 0n;
-        if (!this.balances[to]) this.balances[to] = 0n;
+        if (!this.balances[from]) {
+          this.balances[from] = 0n;
+          this.#emit('BalanceStarted', from, this.balances[from]);
+        }
+        if (!this.balances[to]) {
+          this.balances[to] = 0n;
+          this.#emit('BalanceStarted', to, this.balances[to]);
+        }
         this.balances[from] -= amount;
         this.balances[to] += amount;
       }
     }
 
-    if (typeof minerAddress === 'string' && minerAddress.length > 0) {
-      if (!this.balances[minerAddress]) this.balances[minerAddress] = 0n;
+    const existsMiner = typeof minerAddress === 'string' && minerAddress.length > 0;
+    if (existsMiner) {
+      if (!this.balances[minerAddress]) {
+        this.balances[minerAddress] = 0n;
+        this.#emit('BalanceStarted', minerAddress, this.balances[minerAddress]);
+      }
       this.balances[minerAddress] += reward + totalGasCollected;
-    } else {
-      this.burnedBalance = reward + totalGasCollected;
-    }
+    } else this.burnedBalance = reward + totalGasCollected;
+
+    this.#emit('BalanceUpdated', {
+      transfers,
+      execAddress,
+      reward,
+      isAdmin,
+      isSufficientBalance,
+      totalGasCollected,
+      totalAmount,
+      gasFee,
+      totalCost,
+      minerAddress: existsMiner ? minerAddress : null,
+    });
   }
 
   getBalances(toString = true) {
@@ -319,6 +451,7 @@ class TinyChainInstance {
   recalculateBalances() {
     this.startBalances();
     if (this.currencyMode) for (const block of this.chain) this.updateBalance(block);
+    this.#emit('BalanceRecalculated', this.balances);
   }
 
   getChainLength() {
@@ -358,6 +491,87 @@ class TinyChainInstance {
     const isValid = this.isValid();
     if (isValid === null) throw new Error('The data chain is null or corrupted.');
     if (!isValid) throw new Error('The data chain is invalid or corrupted.');
+    this.#emit('ImportChain', this.chain);
+  }
+
+  /**
+   * Returns the base fee per gas (in gwei).
+   * @returns {bigint}
+   */
+  getBaseFeePerGas() {
+    return this.baseFeePerGas;
+  }
+
+  /**
+   * Returns the default priority fee (in gwei).
+   * @returns {bigint}
+   */
+  getDefaultPriorityFee() {
+    return this.priorityFeeDefault;
+  }
+
+  /**
+   * Returns the current transfer gas cost per transaction.
+   * @returns {bigint}
+   */
+  getTransferGas() {
+    return this.transferGas;
+  }
+
+  /**
+   * Returns the chain difficulty.
+   * @returns {bigint}
+   */
+  getDifficulty() {
+    return this.difficulty;
+  }
+
+  /**
+   * Returns the initial reward per block.
+   * @returns {bigint}
+   */
+  getInitialReward() {
+    return this.initialReward;
+  }
+
+  /**
+   * Returns the halving interval.
+   * @returns {bigint}
+   */
+  getHalvingInterval() {
+    return this.halvingInterval;
+  }
+
+  /**
+   * Returns the last block reward index.
+   * @returns {bigint}
+   */
+  getLastBlockReward() {
+    return this.lastBlockReward;
+  }
+
+  /**
+   * Returns true if the blockchain is in currency mode.
+   * @returns {boolean}
+   */
+  isCurrencyMode() {
+    return this.currencyMode;
+  }
+
+  /**
+   * Returns a list of all admin addresses.
+   * @returns {string[]}
+   */
+  getAdmins() {
+    return Array.from(this.admins);
+  }
+
+  /**
+   * Returns true if payloads are stored as string.
+   * @returns {boolean}
+   */
+  isPayloadString() {
+    return this.#payloadString;
   }
 }
 
