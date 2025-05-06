@@ -422,6 +422,20 @@ class TinyChainBlock {
   }
 
   /**
+   * Retrieves a transaction's data by its transaction ID.
+   *
+   * @param {string} tx - The transaction ID used as key in the transaction index map.
+   * @returns {TransactionData} The corresponding transaction data.
+   * @throws {Error} If the transaction ID is not found in the data list.
+   */
+  getTx(tx) {
+    const txs = this.getTxs();
+    const txData = this.data[txs[tx]];
+    if (!txData) throw new Error(`Transaction data not found for tx ID "${tx}".`);
+    return txData;
+  }
+
+  /**
    * Returns the parser instance used for hashing and serialization.
    * @returns {TinyCryptoParser}
    */
