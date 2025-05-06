@@ -870,9 +870,11 @@ class TinyChainInstance {
 
     /** @type {Balances} */
     const balances = {};
+    for (const [address, balance] of Object.entries(this.initialBalances))
+      balances[address] = BigInt(balance);
 
     const chain = this.chain.slice(startIndex, end + 1);
-    for (const block of this.chain) this.updateBalance(block, balances, false);
+    for (const block of chain) this.updateBalance(block, balances, false);
 
     return balances;
   }

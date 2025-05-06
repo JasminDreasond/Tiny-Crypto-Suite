@@ -101,6 +101,11 @@ const tinyChainSimulation = async () => {
   const isValid = newChain.isValid(1, 2);
   console.log(`🧪 Range 1-2 is ${isValid ? 'valid ✅' : 'invalid ❌'}`);
 
+  console.log('📊 Block 2 balances:');
+  const block2Balances = chain.getBalancesAt(0, 2);
+  for (const [user, balance] of Object.entries(block2Balances))
+    console.log(`   - ${user}: ${balance}`);
+
   // Testar halving do reward (3 blocos = reward cai)
   const halvingBlocks = [];
   for (let i = 0; i < 20; i++) {
