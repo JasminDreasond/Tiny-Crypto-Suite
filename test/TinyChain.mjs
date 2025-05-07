@@ -134,7 +134,7 @@ const tinySignatureTest = async () => {
   console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
 
   const signer = new TinyChain.Secp256k1({ msgPrefix: '\x18Bitcoin Signed Message:\n' });
-  await signer.initEc();
+  await signer.init();
 
   const privateKey = signer.getPrivateKeyHex();
   const publicKey = signer.getPublicKeyHex();

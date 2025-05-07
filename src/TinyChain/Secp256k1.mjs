@@ -84,7 +84,7 @@ class TinySecp256k1 {
    *
    * @returns {Promise<KeyPair>} The elliptic key pair.
    */
-  async initEc() {
+  async init() {
     const ec = await this.fetchElliptic();
     this.keyPair = ec.keyFromPrivate(this.privateKey);
     return this.keyPair;
