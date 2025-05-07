@@ -1,28 +1,6 @@
 import { randomBytes, createHash } from 'crypto';
 import { Buffer } from 'buffer';
 
-// helpers
-
-/**
- * Computes SHA-256 hash of the input buffer.
- *
- * @param {Buffer} buf - The buffer to hash.
- * @returns {Buffer} The SHA-256 hash of the input.
- */
-function sha256(buf) {
-  return createHash('sha256').update(buf).digest();
-}
-
-/**
- * Computes double SHA-256 hash of the input buffer.
- *
- * @param {Buffer} buf - The buffer to hash.
- * @returns {Buffer} The double SHA-256 hash of the input.
- */
-function doubleSha256(buf) {
-  return sha256(sha256(buf));
-}
-
 /**
  * A minimal wrapper around the `secp256k1` elliptic curve cryptography using the `elliptic` library.
  * Provides functionality for creating and managing an elliptic key pair, signing messages,
@@ -47,7 +25,7 @@ function doubleSha256(buf) {
  *   privateKeyEncoding: 'hex'
  * });
  * await signer.init();
- * const sig = signer.signMessageWithRecovery('hello');
+ * const sig = signer.signMessage('hello');
  * const pubKey = signer.recoverMessage('hello', sig);
  * ```
  *
@@ -64,7 +42,27 @@ class TinySecp256k1 {
   /** @typedef {import('elliptic')} Elliptic */
   /** @typedef {import('elliptic').ec} ec */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
-  #msgPrefix = '\x18Tinychain Signed Message:\n';
+  msgPrefix = '\x18Tinychain Signed Message:\n';
+
+  /**
+   * Computes SHA-256 hash of the input buffer.
+   *
+   * @param {Buffer} buf - The buffer to hash.
+   * @returns {Buffer} The SHA-256 hash of the input.
+   */
+  static sha256(buf) {
+    return createHash('sha256').update(buf).digest();
+  }
+
+  /**
+   * Computes double SHA-256 hash of the input buffer.
+   *
+   * @param {Buffer} buf - The buffer to hash.
+   * @returns {Buffer} The double SHA-256 hash of the input.
+   */
+  static doubleSha256(buf) {
+    return TinySecp256k1.sha256(TinySecp256k1.sha256(buf));
+  }
 
   /**
    * Creates an instance of TinySecp256k1.
@@ -75,7 +73,7 @@ class TinySecp256k1 {
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
   constructor({ msgPrefix = null, privateKey = null, privateKeyEncoding = 'hex' } = {}) {
-    if (typeof msgPrefix === 'string') this.#msgPrefix = msgPrefix;
+    if (typeof msgPrefix === 'string') this.msgPrefix = msgPrefix;
     this.privateKey = privateKey ? Buffer.from(privateKey, privateKeyEncoding) : randomBytes(32);
   }
 
@@ -190,7 +188,7 @@ class TinySecp256k1 {
    */
   signECDSA(message, encoding = 'utf8') {
     const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
-    const hash = doubleSha256(msgBuffer);
+    const hash = TinySecp256k1.doubleSha256(msgBuffer);
     const signature = this.getKeyPair().sign(hash, { canonical: true });
     return Buffer.from(signature.toDER());
   }
@@ -207,7 +205,7 @@ class TinySecp256k1 {
   verifyECDSA(message, signatureBuffer, pubKeyHex, encoding) {
     const ec = this.getEc();
     const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
-    const hash = doubleSha256(msgBuffer);
+    const hash = TinySecp256k1.doubleSha256(msgBuffer);
     const key = ec.keyFromPublic(pubKeyHex, 'hex');
     return key.verify(hash, signatureBuffer);
   }
@@ -239,7 +237,7 @@ class TinySecp256k1 {
     const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
     const msgPrefix = Buffer.from(prefix + msgBuffer.length);
     const fullMessage = Buffer.concat([msgPrefix, msgBuffer]);
-    const hash = doubleSha256(fullMessage);
+    const hash = TinySecp256k1.doubleSha256(fullMessage);
     return hash;
   }
 
@@ -250,13 +248,13 @@ class TinySecp256k1 {
    * @param {Buffer} signature - A 65-byte compact signature buffer (r + s + v).
    * @param {Object} [options] - Options for decoding the message hash.
    * @param {BufferEncoding} [options.encoding='hex'] - The encoding of the input message.
-   * @param {string} [options.prefix=this.#msgPrefix] - Optional prefix used before hashing the message.
+   * @param {string} [options.prefix=this.msgPrefix] - Optional prefix used before hashing the message.
    * @returns {string} The recovered compressed public key in hex format, or null if recovery fails.
    * @throws {Error} If the encoding type is unsupported or signature is invalid.
    */
   recoverMessage(message, signature, options = {}) {
     const ec = this.getEc();
-    const { encoding = 'hex', prefix = this.#msgPrefix } = options;
+    const { encoding = 'hex', prefix = this.msgPrefix } = options;
     const hash = this.#getMessageHash(message, encoding, prefix);
 
     const { r, s, v } = this.#normalizeSignature(signature);
@@ -270,18 +268,18 @@ class TinySecp256k1 {
    * @param {string|Buffer} message - The message to sign.
    * @param {Object} [options] - Options for the message hashing process.
    * @param {BufferEncoding} [options.encoding='hex'] - The encoding used for string messages.
-   * @param {string} [options.prefix=this.#msgPrefix] - Optional message prefix for the hash.
+   * @param {string} [options.prefix=this.msgPrefix] - Optional message prefix for the hash.
    * @returns {Buffer} A 65-byte recoverable signature (r + s + v).
    * @throws {Error} If recovery param is missing or encoding type is unsupported.
    */
   signMessage(message, options = {}) {
     const keyPair = this.getKeyPair();
-    const { encoding = 'hex', prefix = this.#msgPrefix } = options;
+    const { encoding = 'hex', prefix = this.msgPrefix } = options;
     const hash = this.#getMessageHash(message, encoding, prefix);
 
     const { r, s, recoveryParam } = keyPair.sign(hash, { canonical: true });
     if (typeof recoveryParam !== 'number')
-      throw new Error('[signMessageWithRecovery] Missing recovery param from signature');
+      throw new Error('[signMessage] Missing recovery param from signature');
 
     const rBuf = r.toArrayLike(Buffer, 'be', 32);
     const sBuf = s.toArrayLike(Buffer, 'be', 32);
