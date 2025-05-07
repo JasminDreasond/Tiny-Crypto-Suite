@@ -1,7 +1,7 @@
 import TinyChainBlock from './Block.mjs';
 import TinyChainEvents from './Events.mjs';
 import TinyChainInstance from './Instance.mjs';
-import Secp256k1 from './Secp256k1.mjs';
+import Secp256k1 from './Secp256k1/index.mjs';
 
 /**
  *
