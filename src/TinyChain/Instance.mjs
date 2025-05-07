@@ -244,7 +244,7 @@ class TinyChainInstance {
    * @param {string|number|bigint} [options.lastBlockReward=1000] - Reward for the last mined block.
    * @param {Balances} [options.initialBalances={}] - Optional mapping of initial addresses to balances.
    * @param {string[]} [options.admins=[]] - List of admin addresses granted elevated permissions.
-   * 
+   *
    * @throws {Error} Throws an error if any parameter has an invalid type or value.
    */
   constructor({
@@ -444,6 +444,21 @@ class TinyChainInstance {
 
     // Emit the event
     this.#emit('InitialBalancesUpdated', this.initialBalances);
+  }
+
+  /**
+   * Gets the current initial balances configured in the system.
+   *
+   * This method returns the mapping of addresses to their initial balances as last set
+   * by `setInitialBalances`. It ensures the returned data is a valid object.
+   *
+   * @returns {Balances} An object mapping addresses to their corresponding initial balances.
+   * @throws {Error} Throws an error if the internal initialBalances is not a valid object.
+   */
+  getInitialBalances() {
+    if (typeof this.initialBalances !== 'object' || this.initialBalances === null)
+      throw new Error('Initial balances are not properly initialized.');
+    return this.initialBalances;
   }
 
   /**
@@ -773,7 +788,7 @@ class TinyChainInstance {
     this.balances = {};
     this.#emit('BalancesInitialized', this.balances);
     if (this.currencyMode) {
-      for (const [address, balance] of Object.entries(this.initialBalances)) {
+      for (const [address, balance] of Object.entries(this.getInitialBalances())) {
         this.balances[address] = BigInt(balance);
         this.#emit('BalanceStarted', address, this.balances[address]);
       }
@@ -971,7 +986,7 @@ class TinyChainInstance {
 
     /** @type {Balances} */
     const balances = {};
-    for (const [address, balance] of Object.entries(this.initialBalances))
+    for (const [address, balance] of Object.entries(this.getInitialBalances()))
       balances[address] = BigInt(balance);
 
     const chain = this.chain.slice(startIndex, end + 1);
