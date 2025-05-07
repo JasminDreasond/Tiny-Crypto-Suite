@@ -17,7 +17,7 @@ class TinyOlmModule {
         console.warn(
           '[TinyOlm] Warning: "@matrix-org/olm" is not installed. ' +
             'TinyOlm requires "@matrix-org/olm" to function properly. ' +
-            'Please install it with "npm install @matrix-org/olm" if you intend to use certificate-related features.',
+            'Please install it with "npm install @matrix-org/olm".',
         );
         return null;
       });

@@ -1,8 +1,14 @@
-import { TinyChain } from '../dist/index.mjs';
-import { colorSafeStringify } from './colorSafeStringify.mjs';
+import stringify from 'safe-stable-stringify';
+import { ColorSafeStringify } from 'tiny-essentials';
+import { Buffer } from 'buffer';
 
-const tinyChainSimulation = async () => {
-  console.log('🌱 Initializing test datachain...');
+import { TinyChain } from '../dist/index.mjs';
+
+const colorJsonSafe = new ColorSafeStringify();
+const colorSafeStringify = (json) => colorJsonSafe.colorize(stringify(json, null, 2));
+
+const tinyWalletSimulation = async () => {
+  console.log('🌱 Initializing test blockchain...');
 
   const chainCfg = {
     currencyMode: true,
@@ -122,6 +128,49 @@ const tinyChainSimulation = async () => {
   console.log(`📊 Burned balance: ${chain.getBurnedBalance().toString()}`);
 
   console.log('🏁 Test completed!');
+};
+
+const tinySignatureTest = async () => {
+  console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
+
+  const signer = new TinyChain.Secp256k1();
+  await signer.init();
+
+  const privateKey = signer.getPrivateKeyHex();
+  const publicKey = signer.getPublicKeyHex();
+
+  console.log('🗝️  Keys');
+  console.log('──────────────────────────────');
+  console.log(`🔒 Private Key : ${privateKey}`);
+  console.log(`🔓 Public Key  : ${publicKey}\n`);
+
+  const message = 'Hello Tinychain! 🪙';
+  const messageBuffer = Buffer.from(message, 'utf8');
+
+  console.log('✍️  Signing with ECDSA (DER)');
+  console.log('──────────────────────────────');
+  const signature = signer.signECDSA(messageBuffer);
+  console.log(`📄 Signature (DER): ${signature.toString('hex')}`);
+
+  const validECDSA = signer.verifyECDSA(messageBuffer, signature, publicKey);
+  console.log(`✅ ECDSA Signature Valid? ${validECDSA}\n`);
+
+  const recoverableMessage = 'Hello world';
+  console.log('♻️  Signing with Recovery Param');
+  console.log('──────────────────────────────');
+  const sig = signer.signMessageWithRecovery(recoverableMessage);
+  console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
+
+  const recoveredPubKey = signer.recoverMessage(recoverableMessage, sig);
+  const isValid = recoveredPubKey === signer.getPublicKeyHex();
+  console.log(`🔍 Message Signature Valid? ${isValid}\n`);
+
+  console.log('✅ Test Completed!\n');
+};
+
+const tinyChainSimulation = async () => {
+  await tinySignatureTest();
+  await tinyWalletSimulation();
 };
 
 export default tinyChainSimulation;
