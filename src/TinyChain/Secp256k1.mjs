@@ -42,7 +42,7 @@ function doubleSha256(buf) {
  * ### Usage:
  * ```js
  * const signer = new TinySecp256k1({
- *   prefix: '\x18MyApp Signed Message:\n',
+ *   msgPrefix: '\x18MyApp Signed Message:\n',
  *   privateKey: 'a1b2c3...',
  *   privateKeyEncoding: 'hex'
  * });
@@ -64,18 +64,18 @@ class TinySecp256k1 {
   /** @typedef {import('elliptic')} Elliptic */
   /** @typedef {import('elliptic').ec} ec */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
-  #prefix = '\x18Tinychain Signed Message:\n';
+  #msgPrefix = '\x18Tinychain Signed Message:\n';
 
   /**
    * Creates an instance of TinySecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
-   * @param {string|null} [options.prefix=null] - Message prefix used during message signing.
+   * @param {string|null} [options.msgPrefix=null] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
-  constructor({ prefix = null, privateKey = null, privateKeyEncoding = 'hex' } = {}) {
-    if (typeof prefix === 'string') this.#prefix = prefix;
+  constructor({ msgPrefix = null, privateKey = null, privateKeyEncoding = 'hex' } = {}) {
+    if (typeof msgPrefix === 'string') this.#msgPrefix = msgPrefix;
     this.privateKey = privateKey ? Buffer.from(privateKey, privateKeyEncoding) : randomBytes(32);
   }
 
@@ -84,7 +84,7 @@ class TinySecp256k1 {
    *
    * @returns {Promise<KeyPair>} The elliptic key pair.
    */
-  async init() {
+  async initEc() {
     const ec = await this.fetchElliptic();
     this.keyPair = ec.keyFromPrivate(this.privateKey);
     return this.keyPair;
@@ -190,7 +190,7 @@ class TinySecp256k1 {
    */
   signECDSA(message, encoding = 'utf8') {
     const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
-    const hash = sha256(msgBuffer); // one SHA256 pass
+    const hash = doubleSha256(msgBuffer);
     const signature = this.getKeyPair().sign(hash, { canonical: true });
     return Buffer.from(signature.toDER());
   }
@@ -207,60 +207,81 @@ class TinySecp256k1 {
   verifyECDSA(message, signatureBuffer, pubKeyHex, encoding) {
     const ec = this.getEc();
     const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
-    const hash = sha256(msgBuffer);
+    const hash = doubleSha256(msgBuffer);
     const key = ec.keyFromPublic(pubKeyHex, 'hex');
     return key.verify(hash, signatureBuffer);
   }
 
   /**
-   * Recovers the public key from a signed message.
+   * Normalizes a 65-byte compact ECDSA signature into its r, s, and v components.
    *
-   * @param {string|Buffer} message - The original message string or buffer.
-   * @param {Buffer} signature - The signature buffer (must include recovery param).
-   * @returns {string|null} Recovered public key in hex format or null if invalid.
+   * @param {Buffer} signature - A 65-byte buffer in the format [r (32) | s (32) | v (1)].
+   * @returns {{ r: Buffer, s: Buffer, v: number }} The signature components.
+   * @throws {Error} If the signature length is invalid or recovery param is out of range.
    */
-  recoverMessage(message, signature) {
-    const ec = this.getEc();
-    const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message);
-    const prefix = Buffer.from(this.#prefix + msgBuffer.length);
-    const fullMessage = Buffer.concat([prefix, msgBuffer]);
-    const hash = doubleSha256(fullMessage); // Bitcoin/Ethereum-style prefixing
-
-    if (signature.length !== 65) {
-      console.warn('[recoverMessage] Signature must be 65 bytes (r + s + recovery param).');
-      return null;
-    }
-
-    const r = signature.slice(0, 32);
-    const s = signature.slice(32, 64);
-    const recoveryParam = signature[64];
-
-    try {
-      const pubKey = ec.recoverPubKey(hash, { r, s }, recoveryParam);
-      return pubKey.encodeCompressed('hex'); // use 'false' for uncompressed
-    } catch (err) {
-      console.warn('[recoverMessage] Failed to recover public key:', err);
-      return null;
-    }
+  #normalizeSignature(signature) {
+    if (signature.length === 65) {
+      let v = signature[64];
+      if (v >= 27) v -= 27;
+      if (v < 0 || v > 3) throw new Error('Invalid recovery param (v): must be 0, 1, 2, or 3');
+      return {
+        r: signature.subarray(0, 32),
+        s: signature.subarray(32, 64),
+        v,
+      };
+    } else throw new Error('Invalid signature length. Expected 65 bytes (r+s+v)');
   }
 
   /**
-   * Signs a message and returns a 65-byte recoverable signature.
-   *
-   * @param {string|Buffer} message - The original message string or buffer.
-   * @returns {Buffer} The signature with recovery param (65 bytes total).
+   * @type {(message: string|Buffer, encoding: BufferEncoding, prefix?: string) => Buffer}
    */
-  signMessageWithRecovery(message) {
-    const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message);
-    const prefix = Buffer.from(this.#prefix + msgBuffer.length);
-    const fullMessage = Buffer.concat([prefix, msgBuffer]);
-    const hash = doubleSha256(fullMessage); // Same hash style as recoverMessage
+  #getMessageHash(message, encoding, prefix = '\x18Bitcoin Signed Message:\n') {
+    const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
+    const msgPrefix = Buffer.from(prefix + msgBuffer.length);
+    const fullMessage = Buffer.concat([msgPrefix, msgBuffer]);
+    const hash = doubleSha256(fullMessage);
+    return hash;
+  }
 
-    const { r, s, recoveryParam } = this.getKeyPair().sign(hash, { canonical: true });
+  /**
+   * Recovers the public key from a signed message and signature with recovery param.
+   *
+   * @param {string|Buffer} message - The original signed message.
+   * @param {Buffer} signature - A 65-byte compact signature buffer (r + s + v).
+   * @param {Object} [options] - Options for decoding the message hash.
+   * @param {BufferEncoding} [options.encoding='hex'] - The encoding of the input message.
+   * @param {string} [options.prefix=this.#msgPrefix] - Optional prefix used before hashing the message.
+   * @returns {string} The recovered compressed public key in hex format, or null if recovery fails.
+   * @throws {Error} If the encoding type is unsupported or signature is invalid.
+   */
+  recoverMessage(message, signature, options = {}) {
+    const ec = this.getEc();
+    const { encoding = 'hex', prefix = this.#msgPrefix } = options;
+    const hash = this.#getMessageHash(message, encoding, prefix);
 
-    if (typeof recoveryParam !== 'number') {
+    const { r, s, v } = this.#normalizeSignature(signature);
+    const pubKey = ec.recoverPubKey(hash, { r, s }, v);
+    return pubKey.encodeCompressed('hex');
+  }
+
+  /**
+   * Signs a message using ECDSA and includes the recovery param in the result.
+   *
+   * @param {string|Buffer} message - The message to sign.
+   * @param {Object} [options] - Options for the message hashing process.
+   * @param {BufferEncoding} [options.encoding='hex'] - The encoding used for string messages.
+   * @param {string} [options.prefix=this.#msgPrefix] - Optional message prefix for the hash.
+   * @returns {Buffer} A 65-byte recoverable signature (r + s + v).
+   * @throws {Error} If recovery param is missing or encoding type is unsupported.
+   */
+  signMessage(message, options = {}) {
+    const keyPair = this.getKeyPair();
+    const { encoding = 'hex', prefix = this.#msgPrefix } = options;
+    const hash = this.#getMessageHash(message, encoding, prefix);
+
+    const { r, s, recoveryParam } = keyPair.sign(hash, { canonical: true });
+    if (typeof recoveryParam !== 'number')
       throw new Error('[signMessageWithRecovery] Missing recovery param from signature');
-    }
 
     const rBuf = r.toArrayLike(Buffer, 'be', 32);
     const sBuf = s.toArrayLike(Buffer, 'be', 32);

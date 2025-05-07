@@ -133,8 +133,8 @@ const tinyWalletSimulation = async () => {
 const tinySignatureTest = async () => {
   console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
 
-  const signer = new TinyChain.Secp256k1();
-  await signer.init();
+  const signer = new TinyChain.Secp256k1({ msgPrefix: '\x18Bitcoin Signed Message:\n' });
+  await signer.initEc();
 
   const privateKey = signer.getPrivateKeyHex();
   const publicKey = signer.getPublicKeyHex();
@@ -158,12 +158,13 @@ const tinySignatureTest = async () => {
   const recoverableMessage = 'Hello world';
   console.log('♻️  Signing with Recovery Param');
   console.log('──────────────────────────────');
-  const sig = signer.signMessageWithRecovery(recoverableMessage);
+  const sig = signer.signMessage(recoverableMessage);
   console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
 
   const recoveredPubKey = signer.recoverMessage(recoverableMessage, sig);
   const isValid = recoveredPubKey === signer.getPublicKeyHex();
   console.log(`🔍 Message Signature Valid? ${isValid}\n`);
+  console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
   console.log('✅ Test Completed!\n');
 };
