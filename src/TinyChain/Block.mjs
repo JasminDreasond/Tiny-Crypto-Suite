@@ -51,6 +51,7 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  *   hash: string,
  *   reward: bigint,
  *   miner: string|null,
+ *   chainId: bigint,
  *   txs: TxIndexMap,
  * }} GetTransactionData
  */
@@ -216,6 +217,7 @@ class TinyChainBlock {
    * @param {bigint | number | string} [options.difficulty=1n] - Mining difficulty.
    * @param {bigint | number | string} [options.reward=0n] - Block reward.
    * @param {bigint | number | string} [options.nonce=0n] - Starting nonce.
+   * @param {bigint | number | string} [options.chainId] - The chain ID.
    * @param {TxIndexMap} [options.txs] - A map where each key is a transaction index.
    * @param {number} [options.timestamp=Date.now()] - Unix timestamp of the block.
    * @param {string|null} [options.hash=null] - Optional precomputed hash.
@@ -226,6 +228,7 @@ class TinyChainBlock {
     payloadString = true,
     parser = new TinyCryptoParser(),
     timestamp = Date.now(),
+    chainId,
     txs,
     data,
     index = 0n,
@@ -267,6 +270,10 @@ class TinyChainBlock {
       throw new Error('miner must be a string or null.');
     this.miner = typeof miner === 'string' ? miner : null;
 
+    if (typeof chainId !== 'bigint' && !(typeof chainId === 'string' && /^[0-9]+$/.test(chainId)))
+      throw new Error('chainId must be a bigint or a numeric string.');
+    this.chainId = typeof chainId === 'bigint' ? chainId : BigInt(chainId);
+
     this.data = this.#dataValidator(data);
     if (this.data.length === 0) throw new Error('The block data cannot be empty.');
     this.txs = this.#validateTxIndexObject(txs);
@@ -292,6 +299,7 @@ class TinyChainBlock {
    */
   get() {
     return {
+      chainId: this.chainId,
       index: this.index,
       timestamp: this.timestamp,
       data: this.data,
@@ -325,6 +333,7 @@ class TinyChainBlock {
     value += this.#parser.serializeDeep(this.data);
     value += this.index.toString();
     value += this.nonce.toString();
+    value += this.chainId.toString();
     return createHash('sha256').update(Buffer.from(value, 'utf-8')).digest('hex');
   }
 

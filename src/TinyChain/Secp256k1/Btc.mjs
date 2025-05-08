@@ -11,7 +11,7 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
    * Creates an instance of TinyBtcSecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
-   * @param {string|null} [options.msgPrefix=null] - Message prefix used during message signing.
+   * @param {string|null} [options.msgPrefix='Bitcoin Signed Message:\n'] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
@@ -21,20 +21,6 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
     privateKeyEncoding = 'hex',
   } = {}) {
     super({ msgPrefix, privateKey, privateKeyEncoding });
-  }
-
-  /**
-   * @param {string|Buffer} message
-   * @param {Buffer} signature
-   * @param {Object} [options]
-   * @param {BufferEncoding} [options.encoding]
-   * @param {string} [options.prefix]
-   * @param {Buffer} [options.publicKey]
-   * @returns {string}
-   * @throws {Error}
-   */
-  recoverMessageKey(message, signature, options = {}) {
-    throw new Error('recoverMessageKey is disabled!');
   }
 
   /**
@@ -286,7 +272,7 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
    * @param {BufferEncoding} [options.encoding='utf8'] - Encoding for input message if it is a string.
    * @param {string} [options.prefix] - Optional prefix (defaults to Bitcoin prefix or instance default).
    * @returns {Buffer} The signature.
-   * @throws {Error} If no private key is available.
+   * @throws {Error} If recovery param could not be calculated.
    */
   signMessage(message, options = {}) {
     const keyPair = this.getKeyPair();
@@ -299,7 +285,10 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
 
     // Calculate recid (recovery param)
     const recid = signature.recoveryParam;
-    if (recid === null) throw new Error('No!');
+    if (recid === null)
+      throw new Error(
+        'Failed to calculate recovery param (recid) from signature. Signature may be invalid or keyPair is not properly initialized.',
+      );
     const header = 27 + recid;
     const sigBuffer = Buffer.concat([Buffer.from([header]), r, s]);
     return sigBuffer;

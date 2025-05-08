@@ -232,6 +232,7 @@ class TinyChainInstance {
    * registered immediately.
    *
    * @param {Object} [options] - Configuration options for the blockchain instance.
+   * @param {string|number|bigint} [options.chainId=0] - The chain ID.
    * @param {string|number|bigint} [options.transferGas=15000] - Fixed gas cost per transfer operation (symbolic).
    * @param {string|number|bigint} [options.baseFeePerGas=21000] - Base gas fee per unit (in gwei).
    * @param {string|number|bigint} [options.priorityFeeDefault=2] - Default priority tip per gas unit (in gwei).
@@ -248,6 +249,7 @@ class TinyChainInstance {
    * @throws {Error} Throws an error if any parameter has an invalid type or value.
    */
   constructor({
+    chainId = 0,
     transferGas = 15000, // symbolic per transfer, varies in real EVM
     baseFeePerGas = 21000,
     priorityFeeDefault = 2,
@@ -262,6 +264,8 @@ class TinyChainInstance {
     admins = [],
   } = {}) {
     // Validation for each parameter
+    if (typeof chainId !== 'bigint' && typeof chainId !== 'number' && typeof chainId !== 'string')
+      throw new Error('Invalid type for chainId. Expected bigint, number, or string.');
     if (
       typeof transferGas !== 'bigint' &&
       typeof transferGas !== 'number' &&
@@ -354,6 +358,13 @@ class TinyChainInstance {
      * @type {bigint}
      */
     this.transferGas = BigInt(transferGas);
+
+    /**
+     * The chain id applied per transfer operation.
+     *
+     * @type {bigint}
+     */
+    this.chainId = BigInt(chainId);
 
     /**
      * The base fee per unit of gas, similar to Ethereum's `baseFeePerGas`.
@@ -513,6 +524,7 @@ class TinyChainInstance {
     return new TinyChainBlock({
       payloadString: this.#payloadString,
       parser: this.#parser,
+      chainId: this.chainId,
       ...options,
     });
   }
