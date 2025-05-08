@@ -20,7 +20,7 @@ import { Buffer } from 'buffer';
  * ### Usage:
  * ```js
  * const signer = new TinySecp256k1({
- *   msgPrefix: '\x18MyApp Signed Message:\n',
+ *   msgPrefix: 'MyApp Signed Message:\n',
  *   privateKey: 'a1b2c3...',
  *   privateKeyEncoding: 'hex'
  * });
@@ -42,7 +42,7 @@ class TinySecp256k1 {
   /** @typedef {import('elliptic')} Elliptic */
   /** @typedef {import('elliptic').ec} ec */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
-  msgPrefix = '\x18Tinychain Signed Message:\n';
+  msgPrefix = 'Tinychain Signed Message:\n';
 
   /**
    * Computes SHA-256 hash of the input buffer.
@@ -109,8 +109,8 @@ class TinySecp256k1 {
    * @returns {Promise<ec>} The loaded `elliptic` module.
    */
   async fetchElliptic() {
-    if (!this.Elliptic) {
-      const Elliptic = await import(/* webpackMode: "eager" */ 'elliptic').catch(() => {
+    if (!this.elliptic) {
+      const elliptic = await import(/* webpackMode: "eager" */ 'elliptic').catch(() => {
         console.warn(
           '[Elliptic] Warning: "elliptic" is not installed. ' +
             'Elliptic requires "elliptic" to function properly. ' +
@@ -118,10 +118,10 @@ class TinySecp256k1 {
         );
         return null;
       });
-      if (Elliptic) {
+      if (elliptic) {
         // @ts-ignore
-        this.Elliptic = Elliptic?.default ?? Elliptic;
-        const EC = this.Elliptic.ec;
+        this.elliptic = elliptic?.default ?? elliptic;
+        const EC = this.elliptic.ec;
         this.ec = new EC('secp256k1');
       }
     }
@@ -151,13 +151,13 @@ class TinySecp256k1 {
    * @throws Will throw an error if the module is not initialized.
    */
   getElliptic() {
-    if (typeof this.Elliptic === 'undefined' || this.Elliptic === null)
+    if (typeof this.elliptic === 'undefined' || this.elliptic === null)
       throw new Error(
-        `Failed to initialize Elliptic: Module is ${this.Elliptic !== null ? 'undefined' : 'null'}.\n` +
+        `Failed to initialize Elliptic: Module is ${this.elliptic !== null ? 'undefined' : 'null'}.\n` +
           'Please make sure "elliptic" is installed.\n' +
           'You can install it by running: npm install elliptic',
       );
-    return this.Elliptic;
+    return this.elliptic;
   }
 
   /**
@@ -177,6 +177,17 @@ class TinySecp256k1 {
    */
   getPublicKeyHex(compressed = true) {
     return this.getKeyPair().getPublic(compressed, 'hex');
+  }
+
+  /**
+   * Returns the public address derived from the public key.
+   *
+   * @param {string} [type] - The type of address to generate.
+   * @param {boolean} [compressed=true] - Whether to use the compressed version of the public key.
+   * @returns {string} The public address.
+   */
+  getAddress(type = '', compressed = true) {
+    return this.getPublicKeyHex(compressed);
   }
 
   /**
@@ -233,7 +244,7 @@ class TinySecp256k1 {
   /**
    * @type {(message: string|Buffer, encoding: BufferEncoding, prefix?: string) => Buffer}
    */
-  #getMessageHash(message, encoding, prefix = '\x18Bitcoin Signed Message:\n') {
+  #getMessageHash(message, encoding, prefix = '') {
     const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
     const msgPrefix = Buffer.from(prefix + msgBuffer.length);
     const fullMessage = Buffer.concat([msgPrefix, msgBuffer]);
@@ -249,12 +260,12 @@ class TinySecp256k1 {
    * @param {Object} [options] - Options for decoding the message hash.
    * @param {BufferEncoding} [options.encoding='hex'] - The encoding of the input message.
    * @param {string} [options.prefix=this.msgPrefix] - Optional prefix used before hashing the message.
-   * @returns {string} The recovered compressed public key in hex format, or null if recovery fails.
+   * @returns {string|null} The recovered compressed public key in hex format, or null if recovery fails.
    * @throws {Error} If the encoding type is unsupported or signature is invalid.
    */
   recoverMessage(message, signature, options = {}) {
-    const ec = this.getEc();
     const { encoding = 'hex', prefix = this.msgPrefix } = options;
+    const ec = this.getEc();
     const hash = this.#getMessageHash(message, encoding, prefix);
 
     const { r, s, v } = this.#normalizeSignature(signature);

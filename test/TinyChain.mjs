@@ -133,11 +133,11 @@ const tinyWalletSimulation = async () => {
 const tinySignatureTest = async () => {
   console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
 
-  const signer = new TinyChain.Secp256k1({ msgPrefix: '\x18Bitcoin Signed Message:\n' });
+  const signer = new TinyChain.Secp256k1();
   await signer.init();
 
   const privateKey = signer.getPrivateKeyHex();
-  const publicKey = signer.getPublicKeyHex();
+  const publicKey = signer.getAddress();
 
   console.log('🗝️  Keys');
   console.log('──────────────────────────────');
@@ -162,7 +162,39 @@ const tinySignatureTest = async () => {
   console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
 
   const recoveredPubKey = signer.recoverMessage(recoverableMessage, sig);
-  const isValid = recoveredPubKey === signer.getPublicKeyHex();
+  const isValid = recoveredPubKey === signer.getAddress();
+  console.log(`🔍 Message Signature Valid? ${isValid}\n`);
+  console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
+
+  console.log('✅ Test Completed!\n');
+};
+
+const tinyBtcSignatureTest = async () => {
+  console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
+
+  const signer = new TinyChain.Btc256k1();
+  await signer.init();
+
+  const privateKey = signer.getPrivateKeyHex();
+  const publicKey = signer.getAddress();
+
+  console.log('🗝️  Keys');
+  console.log('──────────────────────────────');
+  console.log(`🔒 Private Key : ${privateKey}`);
+  console.log(`🔓 Public Key  : ${publicKey}\n`);
+
+  const recoverableMessage = 'Hello world';
+  console.log('♻️  Signing message');
+  console.log('──────────────────────────────');
+  const sig = signer.signMessage(recoverableMessage);
+  console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
+
+  const recoveredPubKey = signer.recoverMessage(
+    recoverableMessage,
+    sig,
+  );
+
+  const isValid = recoveredPubKey === signer.getAddress();
   console.log(`🔍 Message Signature Valid? ${isValid}\n`);
   console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
@@ -171,6 +203,7 @@ const tinySignatureTest = async () => {
 
 const tinyChainSimulation = async () => {
   await tinySignatureTest();
+  await tinyBtcSignatureTest();
   await tinyWalletSimulation();
 };
 
