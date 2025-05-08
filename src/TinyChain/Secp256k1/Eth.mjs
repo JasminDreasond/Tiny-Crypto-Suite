@@ -84,7 +84,6 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
   }
 
   /**
-  
   * Apply EIP-55 checksum to a lowercase address.
   * @param {string} address - Hex string without 0x prefix.
   * @returns {string}

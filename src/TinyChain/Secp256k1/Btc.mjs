@@ -204,23 +204,13 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
   }
 
   /**
-   * RIPEMD160(SHA256(x))
-   * @param {Buffer} buffer
-   * @returns {Buffer}
-   */
-  #hash160(buffer) {
-    const sha = createHash('sha256').update(buffer).digest();
-    return createHash('ripemd160').update(sha).digest();
-  }
-
-  /**
    * Generates P2PKH address from public key
    * @param {Buffer} pubKey
    * @returns {string}
    */
   #pubkeyToP2pkhAddress(pubKey) {
     const bs58check = this.getBs58check();
-    const pubkeyHash = this.#hash160(pubKey);
+    const pubkeyHash = TinySecp256k1.hash160(pubKey);
     const versioned = Buffer.concat([Buffer.from([0x00]), pubkeyHash]); // Mainnet P2PKH
     return bs58check.encode(versioned);
   }
@@ -232,7 +222,7 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
    */
   #pubkeyToBech32Address(pubKey) {
     const bech32 = this.getBech32();
-    const ripemd160 = this.#hash160(pubKey);
+    const ripemd160 = TinySecp256k1.hash160(pubKey);
     // Convert for bech32: witness version 0 + program (ripemd160 result)
     const words = bech32.toWords(ripemd160);
     words.unshift(0x00); // witness version

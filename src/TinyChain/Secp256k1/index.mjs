@@ -65,6 +65,16 @@ class TinySecp256k1 {
   }
 
   /**
+   * RIPEMD160(SHA256(x))
+   * @param {Buffer} buffer
+   * @returns {Buffer}
+   */
+  static hash160(buffer) {
+    const sha = createHash('sha256').update(buffer).digest();
+    return createHash('ripemd160').update(sha).digest();
+  }
+
+  /**
    * Creates an instance of TinySecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
