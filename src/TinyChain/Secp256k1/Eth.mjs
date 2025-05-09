@@ -9,16 +9,18 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
    * Creates an instance of TinyEthSecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
+   * @param {string|null} [options.prefix='0x'] - Crypto prefix used during message verification.
    * @param {string|null} [options.msgPrefix='\x19Ethereum Signed Message:\n'] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
   constructor({
+    prefix = '0x',
     msgPrefix = '\x19Ethereum Signed Message:\n',
     privateKey = null,
     privateKeyEncoding = 'hex',
   } = {}) {
-    super({ msgPrefix, privateKey, privateKeyEncoding });
+    super({ prefix, msgPrefix, privateKey, privateKeyEncoding });
   }
 
   /**
@@ -84,14 +86,14 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
   }
 
   /**
-  * Apply EIP-55 checksum to a lowercase address.
-  * @param {string} address - Hex string without 0x prefix.
-  * @returns {string}
-    */
+   * Apply EIP-55 checksum to a lowercase address.
+   * @param {string} address - Hex string without 0x prefix.
+   * @returns {string}
+   */
   #toChecksumAddress(address) {
     const { keccak256 } = this.getJsSha3();
     const hash = keccak256(address.toLowerCase());
-    let checksumAddress = '0x';
+    let checksumAddress = this.prefix;
     for (let i = 0; i < address.length; i++) {
       const char = address[i];
       const hashChar = parseInt(hash[i], 16);

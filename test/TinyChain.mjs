@@ -170,7 +170,7 @@ const tinySignatureTest = async () => {
 };
 
 const tinyBtcSignatureTest = async () => {
-  console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
+  console.log('\n🔐🔹 TinySecp256k1 BTC Signature Test 🔹🔐\n');
 
   const signer = new TinyChain.Btc256k1();
   await signer.init();
@@ -178,13 +178,13 @@ const tinyBtcSignatureTest = async () => {
   const privateKey = signer.getPrivateKeyHex();
   const publicKey = signer.getAddress();
 
-  console.log('🗝️  Keys');
+  console.log('🗝️  Keys (BTC)');
   console.log('──────────────────────────────');
   console.log(`🔒 Private Key : ${privateKey}`);
   console.log(`🔓 Public Key  : ${publicKey}\n`);
 
   const recoverableMessage = 'Hello world';
-  console.log('♻️  Signing message');
+  console.log('♻️  Signing message (BTC)');
   console.log('──────────────────────────────');
   const sig = signer.signMessage(recoverableMessage);
   console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
@@ -195,11 +195,11 @@ const tinyBtcSignatureTest = async () => {
   console.log(`🔍 Message Signature Valid? ${isValid}\n`);
   console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
-  console.log('✅ Test Completed!\n');
+  console.log('✅ Test Completed! (BTC)\n');
 };
 
 const testTinyEthSecp256k1 = async () => {
-  console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
+  console.log('\n🔐🔹 TinySecp256k1 ETH Signature Test 🔹🔐\n');
 
   const signer = new TinyChain.Eth256k1();
   await signer.init();
@@ -207,13 +207,13 @@ const testTinyEthSecp256k1 = async () => {
   const privateKey = signer.getPrivateKeyHex();
   const publicKey = signer.getAddress();
 
-  console.log('🗝️  Keys');
+  console.log('🗝️  Keys (ETH)');
   console.log('──────────────────────────────');
   console.log(`🔒 Private Key : ${privateKey}`);
   console.log(`🔓 Public Key  : ${publicKey}\n`);
 
   const recoverableMessage = 'Hello world';
-  console.log('♻️  Signing message');
+  console.log('♻️  Signing message (ETH)');
   console.log('──────────────────────────────');
   const sig = signer.signMessage(recoverableMessage);
   console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
@@ -224,7 +224,7 @@ const testTinyEthSecp256k1 = async () => {
   console.log(`🔍 Message Signature Valid? ${isValid}\n`);
   console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
-  console.log('✅ Test Completed!\n');
+  console.log('✅ Test Completed! (ETH)\n');
 };
 
 const tinyChainSimulation = async () => {

@@ -40,6 +40,10 @@
   "keywords": [
     "encryption",
     "decryption",
+    "secp256k1",
+    "bech32",
+    "bs58check",
+    "keccak256",
     "aes",
     "rsa",
     "x.509",

@@ -43,6 +43,7 @@ class TinySecp256k1 {
   /** @typedef {import('elliptic').ec} ec */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
   msgPrefix = 'Tinychain Signed Message:\n';
+  prefix = '';
 
   /**
    * Computes SHA-256 hash of the input buffer.
@@ -78,12 +79,19 @@ class TinySecp256k1 {
    * Creates an instance of TinySecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
+   * @param {string|null} [options.prefix=null] - Crypto prefix used during message verification.
    * @param {string|null} [options.msgPrefix=null] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
-  constructor({ msgPrefix = null, privateKey = null, privateKeyEncoding = 'hex' } = {}) {
+  constructor({
+    prefix = null,
+    msgPrefix = null,
+    privateKey = null,
+    privateKeyEncoding = 'hex',
+  } = {}) {
     if (typeof msgPrefix === 'string') this.msgPrefix = msgPrefix;
+    if (typeof prefix === 'string') this.prefix = prefix;
     this.privateKey = privateKey ? Buffer.from(privateKey, privateKeyEncoding) : randomBytes(32);
   }
 
@@ -197,7 +205,7 @@ class TinySecp256k1 {
    * @returns {string} The public address.
    */
   getAddress(type = '', compressed = true) {
-    return this.getPublicKeyHex(compressed);
+    return `${this.prefix}${this.getPublicKeyHex(compressed)}`;
   }
 
   /**

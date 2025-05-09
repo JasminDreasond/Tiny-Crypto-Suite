@@ -11,16 +11,18 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
    * Creates an instance of TinyBtcSecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
+   * @param {string|null} [options.prefix='bc'] - Crypto prefix used during message verification.
    * @param {string|null} [options.msgPrefix='Bitcoin Signed Message:\n'] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
   constructor({
+    prefix = 'bc',
     msgPrefix = 'Bitcoin Signed Message:\n',
     privateKey = null,
     privateKeyEncoding = 'hex',
   } = {}) {
-    super({ msgPrefix, privateKey, privateKeyEncoding });
+    super({ prefix, msgPrefix, privateKey, privateKeyEncoding });
   }
 
   /**
@@ -226,7 +228,7 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
     // Convert for bech32: witness version 0 + program (ripemd160 result)
     const words = bech32.toWords(ripemd160);
     words.unshift(0x00); // witness version
-    return bech32.encode('bc', words); // bc = mainnet
+    return bech32.encode(this.prefix, words); // bc = mainnet
   }
 
   /**
