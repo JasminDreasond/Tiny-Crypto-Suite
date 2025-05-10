@@ -53,13 +53,13 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  * @property {TinyCryptoParser} [parser] - Parser instance used for deep serialization.
  * @property {bigint | number | string} [index=0n] - Block index.
  * @property {string} [options.prevHash=''] - Hash of the previous block.
- * @property {bigint | number | string} [difficulty=1n] - Mining difficulty.
+ * @property {bigint | number | string} [diff=1n] - Mining difficulty.
  * @property {bigint | number | string} [reward=0n] - Block reward.
  * @property {bigint | number | string} [nonce=0n] - Starting nonce.
  * @property {bigint | number | string} [chainId] - The chain ID.
  * @property {TxIndexMap} [txs] - A map where each key is a transaction index.
  * @property {SignIndexMap} [sigs] - A map where each key is a transaction signature.
- * @property {number} [timestamp=Date.now()] - Unix timestamp of the block.
+ * @property {number} [time=Date.now()] - Unix timestamp of the block.
  * @property {string|null} [hash=null] - Optional precomputed hash.
  * @property {string|null} [miner=null] - Address of the miner.
  * @property {NewTransactionData[]} [data=[]] - Block data.
@@ -67,10 +67,10 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
 /**
  * @typedef {{
  *   index: bigint,
- *   timestamp: number,
+ *   time: number,
  *   data: TransactionData[],
  *   prevHash: string|null,
- *   difficulty: bigint,
+ *   diff: bigint,
  *   nonce: bigint,
  *   hash: string,
  *   reward: bigint,
@@ -279,39 +279,40 @@ class TinyChainBlock {
     payloadString = true,
     signer = new TinySecp256k1(),
     parser = new TinyCryptoParser(),
-    timestamp = Date.now(),
+    time = Date.now(),
     chainId,
     txs,
     sigs,
     data,
     index = 0n,
     prevHash = '',
-    difficulty = 1n,
+    diff = 1n,
     reward = 0n,
     nonce = 0n,
     hash = null,
     miner = null,
   } = {}) {
-    if (typeof timestamp !== 'number') throw new Error('The timestamp need to be a number.');
+    if (typeof time !== 'number') throw new Error('The timestamp need to be a number.');
     if (typeof payloadString !== 'boolean') throw new Error('payloadString must be a boolean.');
     this.#payloadString = payloadString;
-    if (typeof parser !== 'object' || parser === null || typeof parser.serializeDeep !== 'function')
+    if (
+      !(parser instanceof TinyCryptoParser) ||
+      parser === null ||
+      typeof parser.serializeDeep !== 'function'
+    )
       throw new Error('parser must be an object with a serializeDeep() method.');
     this.#parser = parser;
-    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0)
+    if (typeof time !== 'number' || !Number.isFinite(time) || time <= 0)
       throw new Error('timestamp must be a positive finite number.');
-    this.timestamp = timestamp;
+    this.time = time;
     if (typeof index !== 'bigint' && !(typeof index === 'string' && /^[0-9]+$/.test(index)))
       throw new Error('index must be a bigint or a numeric string.');
     this.index = typeof index === 'bigint' ? index : BigInt(index);
     if (typeof prevHash !== 'string') throw new Error('prevHash must be a hash string.');
     this.prevHash = prevHash;
-    if (
-      typeof difficulty !== 'bigint' &&
-      !(typeof difficulty === 'string' && /^[0-9]+$/.test(difficulty))
-    )
+    if (typeof diff !== 'bigint' && !(typeof diff === 'string' && /^[0-9]+$/.test(diff)))
       throw new Error('difficulty must be a bigint or a numeric string.');
-    this.difficulty = typeof difficulty === 'bigint' ? difficulty : BigInt(difficulty);
+    this.diff = typeof diff === 'bigint' ? diff : BigInt(diff);
     if (typeof nonce !== 'bigint' && !(typeof nonce === 'string' && /^[0-9]+$/.test(nonce)))
       throw new Error('nonce must be a bigint or a numeric string.');
     this.nonce = typeof nonce === 'bigint' ? nonce : BigInt(nonce);
@@ -327,7 +328,7 @@ class TinyChainBlock {
       throw new Error('chainId must be a bigint or a numeric string.');
     this.chainId = typeof chainId === 'bigint' ? chainId : BigInt(chainId);
 
-    if (typeof signer !== 'object')
+    if (!(signer instanceof TinySecp256k1))
       throw new Error('Invalid type for signer. Expected a TinySecp256k1.');
     this.#signer = signer;
 
@@ -356,9 +357,11 @@ class TinyChainBlock {
    * number of validated transactions does not match the expected count.
    */
   validateBlockContent() {
-    for (const index in this.data) {
-      const data = this.data[index];
-      const sig = this.sigs[index];
+    const dc = this.getData();
+    const sigs = this.getSigs();
+    for (const index in dc) {
+      const data = dc[index];
+      const sig = sigs[index];
       if (
         !this.#signer.verifyECDSA(
           this.#parser.serializeDeep(data),
@@ -389,10 +392,10 @@ class TinyChainBlock {
     return {
       chainId: this.chainId,
       index: this.index,
-      timestamp: this.timestamp,
+      time: this.time,
       data: this.data,
       prevHash: this.prevHash,
-      difficulty: this.difficulty,
+      diff: this.diff,
       nonce: this.nonce,
       hash: this.hash,
       reward: this.reward,
@@ -417,13 +420,13 @@ class TinyChainBlock {
    */
   calculateHash() {
     let value = '';
-    value += String(this.timestamp);
-    value += this.prevHash;
+    value += String(this.time);
+    value += this.getPrevHash();
     value += this.#parser.serializeDeep(this.data);
     value += this.#parser.serialize(this.sigs);
-    value += this.index.toString();
-    value += this.nonce.toString();
-    value += this.chainId.toString();
+    value += this.getIndex().toString();
+    value += this.getNonce().toString();
+    value += this.getChainId().toString();
     return createHash('sha256').update(Buffer.from(value, 'utf-8')).digest('hex');
   }
 
@@ -436,9 +439,8 @@ class TinyChainBlock {
    * @throws {Error} If the index is out of bounds
    */
   generateTxId(index) {
-    if (!Array.isArray(this.data)) throw new Error('Invalid data: this.data must be an array.');
     if (typeof index !== 'number') throw new Error(`Invalid index: must be a number.`);
-    const data = this.data[index];
+    const data = this.getData()[index];
     if (typeof data !== 'object')
       throw new Error(`Invalid index: must be a number between 0 and ${this.data.length - 1}.`);
     return createHash('sha256')
@@ -460,13 +462,13 @@ class TinyChainBlock {
     if (minerAddress.trim().length === 0)
       throw new Error('Invalid address: address string cannot be empty or only whitespace');
 
-    const difficultyPrefix = '0'.repeat(Number(this.difficulty));
+    const difficultyPrefix = '0'.repeat(Number(this.diff));
     let attempts = 0;
     const startTime = Date.now();
 
     this.index = index;
     this.prevHash = prevHash;
-    this.timestamp = startTime;
+    this.time = startTime;
 
     const mineStep = async () => {
       for (let i = 0; i < 10000; i++) {
@@ -538,19 +540,33 @@ class TinyChainBlock {
   }
 
   /**
-   * Returns the parser instance used for hashing and serialization.
+   * Returns the parser instance responsible for cryptographic serialization and hashing.
    * @returns {TinyCryptoParser}
    */
   getParser() {
+    if (!(this.#parser instanceof TinyCryptoParser))
+      throw new Error('Parser is not a valid TinyCryptoParser instance');
     return this.#parser;
+  }
+
+  /**
+   * Returns the signer instance responsible for signing and verifying cryptographic data.
+   * @returns {TinySecp256k1}
+   */
+  getSigner() {
+    if (!(this.#signer instanceof TinySecp256k1))
+      throw new Error('Signer is not a valid TinySecp256k1 instance');
+    return this.#signer;
   }
 
   /**
    * Returns the timestamp when the block was created.
    * @returns {number}
    */
-  getTimestamp() {
-    return this.timestamp;
+  getTime() {
+    if (typeof this.time !== 'number' || !Number.isInteger(this.time) || this.time < 0)
+      throw new Error('Time must be a non-negative integer');
+    return this.time;
   }
 
   /**
@@ -558,7 +574,19 @@ class TinyChainBlock {
    * @returns {bigint}
    */
   getIndex() {
+    if (typeof this.index !== 'bigint' || this.index < 0n)
+      throw new Error('Index must be a non-negative bigint');
     return this.index;
+  }
+
+  /**
+   * Returns the chain ID of the blockchain instance.
+   * @returns {bigint}
+   */
+  getChainId() {
+    if (typeof this.chainId !== 'bigint' || this.chainId < 0n)
+      throw new Error('Chain ID must be a non-negative bigint');
+    return this.chainId;
   }
 
   /**
@@ -566,6 +594,8 @@ class TinyChainBlock {
    * @returns {string|null}
    */
   getPrevHash() {
+    if (this.prevHash !== null && typeof this.prevHash !== 'string')
+      throw new Error('Previous hash must be a string or null');
     return this.prevHash;
   }
 
@@ -573,8 +603,10 @@ class TinyChainBlock {
    * Returns the difficulty level of the block.
    * @returns {bigint}
    */
-  getDifficulty() {
-    return this.difficulty;
+  getDiff() {
+    if (typeof this.diff !== 'bigint' || this.diff < 0n)
+      throw new Error('Difficulty must be a non-negative bigint');
+    return this.diff;
   }
 
   /**
@@ -582,6 +614,8 @@ class TinyChainBlock {
    * @returns {bigint}
    */
   getReward() {
+    if (typeof this.reward !== 'bigint' || this.reward < 0n)
+      throw new Error('Reward must be a non-negative bigint');
     return this.reward;
   }
 
@@ -590,6 +624,8 @@ class TinyChainBlock {
    * @returns {bigint}
    */
   getNonce() {
+    if (typeof this.nonce !== 'bigint' || this.nonce < 0n)
+      throw new Error('Nonce must be a non-negative bigint');
     return this.nonce;
   }
 
@@ -598,6 +634,8 @@ class TinyChainBlock {
    * @returns {string|null}
    */
   getMiner() {
+    if (this.miner !== null && typeof this.miner !== 'string')
+      throw new Error('Miner must be a string or null');
     return this.miner;
   }
 
@@ -606,7 +644,17 @@ class TinyChainBlock {
    * @returns {TransactionData[]}
    */
   getData() {
+    if (!Array.isArray(this.data)) throw new Error('Data must be an array of TransactionData');
     return this.data;
+  }
+
+  /**
+   * Returns the list of signatures attached to the block.
+   * @returns {SignIndexMap}
+   */
+  getSigs() {
+    if (!Array.isArray(this.sigs)) throw new Error('Signatures must be an array of SignatureData');
+    return this.sigs;
   }
 
   /**
@@ -614,6 +662,7 @@ class TinyChainBlock {
    * @returns {string}
    */
   getHash() {
+    if (typeof this.hash !== 'string') throw new Error('Hash must be a string');
     return this.hash;
   }
 }

@@ -222,7 +222,7 @@ class TinyChainInstance {
    * @param {string|number|bigint} [options.transferGas=15000] - Fixed gas cost per transfer operation (symbolic).
    * @param {string|number|bigint} [options.baseFeePerGas=21000] - Base gas fee per unit (in gwei).
    * @param {string|number|bigint} [options.priorityFeeDefault=2] - Default priority tip per gas unit (in gwei).
-   * @param {string|number|bigint} [options.difficulty=1] - Difficulty for proof-of-work or validation cost.
+   * @param {string|number|bigint} [options.diff=1] - Difficulty for proof-of-work or validation cost.
    * @param {boolean} [options.payloadString=true] - If true, treats payloads as strings.
    * @param {boolean} [options.currencyMode=false] - Enables balance tracking and gas economics.
    * @param {boolean} [options.payloadMode=false] - Enables payload execution mode for blocks.
@@ -240,7 +240,7 @@ class TinyChainInstance {
     transferGas = 15000, // symbolic per transfer, varies in real EVM
     baseFeePerGas = 21000,
     priorityFeeDefault = 2,
-    difficulty = 1,
+    diff = 1,
     payloadString = true,
     currencyMode = false,
     payloadMode = false,
@@ -273,11 +273,7 @@ class TinyChainInstance {
       typeof priorityFeeDefault !== 'string'
     )
       throw new Error('Invalid type for priorityFeeDefault. Expected bigint, number, or string.');
-    if (
-      typeof difficulty !== 'bigint' &&
-      typeof difficulty !== 'number' &&
-      typeof difficulty !== 'string'
-    )
+    if (typeof diff !== 'bigint' && typeof diff !== 'number' && typeof diff !== 'string')
       throw new Error('Invalid type for difficulty. Expected bigint, number, or string.');
     if (typeof payloadString !== 'boolean')
       throw new Error('Invalid type for payloadString. Expected boolean.');
@@ -380,7 +376,7 @@ class TinyChainInstance {
      *
      * @type {bigint}
      */
-    this.difficulty = BigInt(difficulty);
+    this.diff = BigInt(diff);
 
     /**
      * The initial block reward.
@@ -550,22 +546,6 @@ class TinyChainInstance {
   }
 
   /**
-   * Sets the default base fee per gas (in gwei).
-   * @param {bigint} value
-   */
-  setBaseFeePerGas(value) {
-    this.baseFeePerGas = BigInt(value);
-  }
-
-  /**
-   * Sets the default max priority fee per gas (in gwei).
-   * @param {bigint} value
-   */
-  setDefaultPriorityFee(value) {
-    this.priorityFeeDefault = BigInt(value);
-  }
-
-  /**
    * Simulates gas estimation for an Ethereum-like transaction.
    * Considers base cost, data size, and per-transfer cost.
    * @param {Transaction[]} transfers - List of transfers (e.g., token or balance movements).
@@ -730,7 +710,7 @@ class TinyChainInstance {
     return this.#createBlockInstance({
       data: [data],
       sigs: [sig.toString('hex')],
-      difficulty: this.difficulty,
+      diff: this.diff,
       reward,
     });
   }
@@ -1223,6 +1203,46 @@ class TinyChainInstance {
   }
 
   /**
+   * Sets the default base fee per gas (in gwei).
+   * @param {bigint} value
+   */
+  setBaseFeePerGas(value) {
+    if (typeof value !== 'bigint') throw new Error('baseFeePerGas must be a bigint');
+    if (value < 0n) throw new Error('baseFeePerGas cannot be negative');
+    this.baseFeePerGas = BigInt(value);
+  }
+
+  /**
+   * Sets the default max priority fee per gas (in gwei).
+   * @param {bigint} value
+   */
+  setDefaultPriorityFee(value) {
+    if (typeof value !== 'bigint') throw new Error('priorityFeeDefault must be a bigint');
+    if (value < 0n) throw new Error('priorityFeeDefault cannot be negative');
+    this.priorityFeeDefault = BigInt(value);
+  }
+
+  /**
+   * Sets the transfer gas cost per transaction.
+   * @param {bigint} value
+   */
+  setTransferGas(value) {
+    if (typeof value !== 'bigint') throw new Error('transferGas must be a bigint');
+    if (value < 0n) throw new Error('transferGas cannot be negative');
+    this.transferGas = value;
+  }
+
+  /**
+   * Sets the chain difficulty.
+   * @param {bigint} value
+   */
+  setDiff(value) {
+    if (typeof value !== 'bigint') throw new Error('diff must be a bigint');
+    if (value < 0n) throw new Error('diff cannot be negative');
+    this.diff = value;
+  }
+
+  /**
    * Returns the base fee per gas (in gwei).
    * @returns {bigint}
    */
@@ -1250,8 +1270,8 @@ class TinyChainInstance {
    * Returns the chain difficulty.
    * @returns {bigint}
    */
-  getDifficulty() {
-    return this.difficulty;
+  getDiff() {
+    return this.diff;
   }
 
   /**

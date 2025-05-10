@@ -22,7 +22,7 @@ const tinyWalletSimulation = async () => {
     signer: adminUser,
     currencyMode: true,
     payloadMode: true,
-    difficulty: 1,
+    diff: 1,
     admins: [adminUser.getPublicKeyHex()],
     initialBalances: {
       [alice.getAddress()]: 1000000000n,
