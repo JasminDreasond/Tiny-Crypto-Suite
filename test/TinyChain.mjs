@@ -8,7 +8,15 @@ const colorJsonSafe = new ColorSafeStringify();
 const colorSafeStringify = (json) => colorJsonSafe.colorize(stringify(json, null, 2));
 
 const tinyWalletSimulation = async () => {
-  console.log('🌱 Initializing test blockchain...');
+  const red = (text) => `\x1b[31m${text}\x1b[0m`;
+  const green = (text) => `\x1b[32m${text}\x1b[0m`;
+  const cyan = (text) => `\x1b[36m${text}\x1b[0m`;
+  const yellow = (text) => `\x1b[33m${text}\x1b[0m`;
+  const bold = (text) => `\x1b[1m${text}\x1b[0m`;
+
+  console.log(bold(cyan('\n🌱🔹━[ Tiny Wallet Simulation ]━🔹🌱\n')));
+
+  console.log('⚙️  Initializing test blockchain...');
 
   const adminUser = new TinyChain.Btc256k1();
   const alice = new TinyChain.Btc256k1();
@@ -36,12 +44,12 @@ const tinyWalletSimulation = async () => {
   const chain = new TinyChain.Instance(chainCfg);
   await chain.init();
 
-  // Verifica balances
-  console.log('📊 User balances:');
+  console.log(bold('\n📊 ━━━ User Balances ━━━━━━━━━━━━'));
   for (const [user, balance] of Object.entries(chain.balances))
     console.log(`   - ${user}: ${balance}`);
 
-  // Admin envia saldo para Alice à força
+  console.log(bold('\n🧱 ━━━ Transactions ━━━━━━━━━━━━━'));
+
   const block1 = chain.createBlock({
     signer: adminUser,
     payload: 'Admin enters here',
@@ -53,11 +61,9 @@ const tinyWalletSimulation = async () => {
       },
     ],
   });
-
   await chain.mineBlock(miner.getAddress(), block1);
-  console.log('✅ Admin forced 5000000n to Alice');
+  console.log(green('✅ Admin forced 5000000n to Alice'));
 
-  // Alice envia para Bob
   const block2 = chain.createBlock({
     signer: alice,
     payload: 'Alice builds',
@@ -69,11 +75,9 @@ const tinyWalletSimulation = async () => {
       },
     ],
   });
-
   await chain.mineBlock(miner.getAddress(), block2);
-  console.log('✅ Alice sent 2000000n to Bob');
+  console.log(green('✅ Alice sent 2000000n to Bob'));
 
-  // Bob tenta enviar dinheiro que não tem de Charlie (deve falhar)
   const block3 = chain.createBlock({
     signer: charlie,
     payload: 'Bob pays fail',
@@ -88,9 +92,8 @@ const tinyWalletSimulation = async () => {
 
   await chain
     .mineBlock(miner.getAddress(), block3)
-    .catch((err) => console.log("❌ As expected, Bob can't send from Charlie:", err.message));
+    .catch((err) => console.log(red("❌ As expected, Bob can't send from Charlie:"), err.message));
 
-  // Charlie recebe de Bob
   const block4 = chain.createBlock({
     signer: bob,
     payload: 'Bob pays back',
@@ -102,61 +105,70 @@ const tinyWalletSimulation = async () => {
       },
     ],
   });
-
   await chain.mineBlock(miner.getAddress(), block4);
-  console.log('✅ Bob sent 1000000n to Charlie');
+  console.log(green('✅ Bob sent 1000000n to Charlie'));
 
-  // Verificar dados
-  console.log('📊 Final data:');
+  console.log(bold('\n📦 ━━━ Final Chain Data ━━━━━━━━━━━━'));
   console.log(colorSafeStringify(chain.getAllChainData()));
 
-  // Verifica balances
-  console.log('📊 Final balances:');
+  console.log(bold('\n📊 ━━━ Final Balances ━━━━━━━━━━━━━━'));
   for (const [user, balance] of Object.entries(chain.balances))
     console.log(`   - ${user}: ${balance}`);
 
-  // Exportar e importar parcialmente (blocos 1 a 2)
+  console.log(bold('\n📤 ━━━ Chain Export/Import ━━━━━━━━━'));
+
   const exportedChain = chain.exportChain();
   const newChain = new TinyChain.Instance(chainCfg);
   newChain.importChain(exportedChain);
   console.log('📦 Imported chain');
 
-  console.log('📊 Imported chain balances:');
+  console.log(bold('\n📊 ━━━ Imported Chain Balances ━━━━'));
   for (const [user, balance] of Object.entries(newChain.balances))
     console.log(`   - ${user}: ${balance}`);
 
-  console.log('📊 Imported data:');
+  console.log(bold('\n📊 ━━━ Imported Chain Data ━━━━━━━━'));
   console.log(colorSafeStringify(newChain.getAllChainData()));
 
-  // Validar range
   const isValid = newChain.isValid(1, 2);
-  console.log(`🧪 Range 1-2 is ${isValid ? 'valid ✅' : 'invalid ❌'}`);
+  console.log(
+    bold('\n🧪 ━━━ Range Validation (1-2) ━━━━━━━'),
+    `\nRange 1-2 is ${isValid ? green('valid ✅') : red('invalid ❌')}`,
+  );
 
-  console.log('📊 Block 2 balances:');
+  console.log(bold('\n📊 ━━━ Balances at Block 2 ━━━━━━━━━'));
   const block2Balances = chain.getBalancesAt(0, 2);
   for (const [user, balance] of Object.entries(block2Balances))
     console.log(`   - ${user}: ${balance}`);
 
-  // Testar halving do reward (3 blocos = reward cai)
+  console.log(bold('\n🧮 ━━━ Reward Halving Test ━━━━━━━━'));
   const halvingBlocks = [];
   for (let i = 0; i < 20; i++) {
     const block = chain.createBlock({ signer: alice });
     halvingBlocks.push(chain.mineBlock(miner.getAddress(), block));
   }
   await Promise.all(halvingBlocks);
+  console.log(yellow('📉 Halving tested'));
 
-  console.log('📉 Halving tested');
-
-  console.log('📊 Final Having balances:');
+  console.log(bold('\n📊 ━━━ Post-Halving Balances ━━━━━━'));
   for (const [user, balance] of Object.entries(chain.balances))
     console.log(`   - ${user}: ${balance}`);
-  console.log(`📊 Burned balance: ${chain.getBurnedBalance().toString()}`);
+  console.log(`💀 Burned balance: ${chain.getBurnedBalance().toString()}`);
 
-  console.log('🏁 Test completed!');
+  console.log(bold(green('\n🏁✅ Test completed!\n')));
+};
+
+const COLOR = {
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  magenta: '\x1b[35m',
+  blue: '\x1b[94m',
+  reset: '\x1b[0m',
 };
 
 const tinySignatureTest = async () => {
-  console.log('\n🔐🔹 TinySecp256k1 Signature Test 🔹🔐\n');
+  console.log(`\n🔐🔹━[ ${COLOR.blue}TinySecp256k1 Signature Test${COLOR.reset} ]━🔹🔐\n`);
 
   const signer = new TinyChain.Secp256k1();
   await signer.init();
@@ -164,45 +176,55 @@ const tinySignatureTest = async () => {
   const privateKey = signer.getPrivateKeyHex();
   const publicKey = signer.getAddress();
 
-  console.log('🗝️  Keys');
-  console.log('──────────────────────────────');
-  console.log(`🔒 Private Key : ${privateKey}`);
-  console.log(`🔓 Public Key  : ${publicKey}\n`);
+  console.log(`🗝️  ━━━ Keys ━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`🔒 Private Key           : ${COLOR.yellow}${privateKey}${COLOR.reset}`);
+  console.log(`🔓 Public Key            : ${COLOR.cyan}${publicKey}${COLOR.reset}\n`);
 
   const message = 'Hello Tinychain! 🪙';
   const messageBuffer = Buffer.from(message, 'utf8');
 
-  console.log('✍️  Signing with ECDSA (DER)');
-  console.log('──────────────────────────────');
+  console.log(`✍️  ━━━ Signing with ECDSA (DER) ━━━`);
   const signature = signer.signECDSA(messageBuffer);
-  console.log(`📄 Signature (DER): ${signature.toString('hex')}`);
+  console.log(
+    `📄 Signature (DER)       : ${COLOR.magenta}${signature.toString('hex')}${COLOR.reset}`,
+  );
 
   const validECDSA = signer.verifyECDSA(messageBuffer, signature, publicKey);
-  console.log(`✅ ECDSA Signature Valid? ${validECDSA}\n`);
+  console.log(
+    `✅ Signature Valid (ECDSA)? : ${validECDSA ? COLOR.green : COLOR.red}${validECDSA}${COLOR.reset}\n`,
+  );
 
   const recoverableMessage = 'Hello world';
-  console.log('♻️  Signing with Recovery Param');
-  console.log('──────────────────────────────');
+  console.log(`♻️  ━━━ Signing with Recovery ━━━`);
   const sig = signer.signMessage(recoverableMessage);
-  console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
+  console.log(`📄 Signature (Recoverable): ${COLOR.magenta}${sig.toString('hex')}${COLOR.reset}`);
 
   const recoveredPubKey = signer.recoverMessage(recoverableMessage, sig);
   const isValid = recoveredPubKey === signer.getAddress();
-  console.log(`🔍 Message Signature Valid? ${isValid}\n`);
-  console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
+  console.log(
+    `🔍 Recovered Matches?    : ${isValid ? COLOR.green : COLOR.red}${isValid}${COLOR.reset}`,
+  );
+  console.log(`📄 Recovered PubKey      : ${COLOR.cyan}${recoveredPubKey}${COLOR.reset}\n`);
 
-  console.log(`🔓 Hash160 Key  :\n`);
-  console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
-  console.log(signer.getPubVanillaAddress().toString('hex'));
+  console.log('🔓 ━━━ Hash160 Keys ━━━━━━━━━━━━━');
+  console.log(
+    `📦 Vanilla (Address)     : ${COLOR.cyan}${signer.addressToVanilla(signer.getAddress()).toString('hex')}${COLOR.reset}`,
+  );
+  console.log(
+    `📦 Vanilla (PubKey)      : ${COLOR.cyan}${signer.getPubVanillaAddress().toString('hex')}${COLOR.reset}\n`,
+  );
 
-  console.log(`🔓 Validate Address  :\n`);
-  console.log(`${signer.getAddress()} - ${signer.validateAddress(signer.getAddress()).valid}`);
+  console.log('🔎 ━━━ Address Validation ━━━━━━━');
+  console.log(`📬 Address               : ${COLOR.cyan}${signer.getAddress()}${COLOR.reset}`);
+  console.log(
+    `✅ Valid?                : ${COLOR.green}${signer.validateAddress(signer.getAddress()).valid}${COLOR.reset}\n`,
+  );
 
-  console.log('✅ Test Completed!\n');
+  console.log(`${COLOR.green}🎉✅ Test Completed!${COLOR.reset}\n`);
 };
 
 const tinyBtcSignatureTest = async () => {
-  console.log('\n🔐🔹 TinySecp256k1 BTC Signature Test 🔹🔐\n');
+  console.log(`\n🔐🔹━[ ${COLOR.blue}TinySecp256k1 BTC Signature Test${COLOR.reset} ]━🔹🔐\n`);
 
   const signer = new TinyChain.Btc256k1();
   await signer.init();
@@ -210,38 +232,48 @@ const tinyBtcSignatureTest = async () => {
   const privateKey = signer.getPrivateKeyHex();
   const publicKey = signer.getAddress();
 
-  console.log('🗝️  Keys (BTC)');
-  console.log('──────────────────────────────');
-  console.log(`🔒 Private Key : ${privateKey}`);
-  console.log(`🔓 Public Key  : ${publicKey}\n`);
+  console.log(`🗝️  ━━━ Keys (BTC) ━━━━━━━━━━━━━━━━`);
+  console.log(`🔒 Private Key           : ${COLOR.yellow}${privateKey}${COLOR.reset}`);
+  console.log(`🔓 Public Key            : ${COLOR.cyan}${publicKey}${COLOR.reset}\n`);
 
   const recoverableMessage = 'Hello world';
-  console.log('♻️  Signing message (BTC)');
-  console.log('──────────────────────────────');
+  console.log(`♻️  ━━━ Signing Message (BTC) ━━━`);
   const sig = signer.signMessage(recoverableMessage);
-  console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
+  console.log(`📄 Signature (Recoverable): ${COLOR.magenta}${sig.toString('hex')}${COLOR.reset}`);
 
   const recoveredPubKey = signer.recoverMessage(recoverableMessage, sig);
-
   const isValid = recoveredPubKey === signer.getAddress();
-  console.log(`🔍 Message Signature Valid? ${isValid}\n`);
-  console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
-  console.log(`🔓 Hash160 Key  :\n`);
-  console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
-  console.log(signer.getPubVanillaAddress().toString('hex'));
-
-  console.log(`🔓 Validate Address  :\n`);
-  console.log(`${signer.getAddress()} - ${signer.validateAddress(signer.getAddress()).valid}`);
   console.log(
-    `${signer.getAddress(undefined, 'p2pkh')} - ${signer.validateAddress(signer.getAddress(undefined, 'p2pkh'), 'p2pkh').valid}`,
+    `🔍 Recovered Matches?    : ${isValid ? COLOR.green : COLOR.red}${isValid}${COLOR.reset}`,
+  );
+  console.log(`📄 Recovered PubKey      : ${COLOR.cyan}${recoveredPubKey}${COLOR.reset}\n`);
+
+  console.log('🔓 ━━━ Hash160 Keys ━━━━━━━━━━━━━');
+  console.log(
+    `📦 Vanilla (Address)     : ${COLOR.cyan}${signer.addressToVanilla(signer.getAddress()).toString('hex')}${COLOR.reset}`,
+  );
+  console.log(
+    `📦 Vanilla (PubKey)      : ${COLOR.cyan}${signer.getPubVanillaAddress().toString('hex')}${COLOR.reset}\n`,
   );
 
-  console.log('✅ Test Completed! (BTC)\n');
+  console.log('🔎 ━━━ Address Validation ━━━━━━━');
+  const addr = signer.getAddress();
+  const p2pkh = signer.getAddress(undefined, 'p2pkh');
+  console.log(`📬 Address               : ${COLOR.cyan}${addr}${COLOR.reset}`);
+  console.log(
+    `✅ Valid?                : ${COLOR.green}${signer.validateAddress(addr).valid}${COLOR.reset}`,
+  );
+  console.log(`📬 P2PKH Address         : ${COLOR.cyan}${p2pkh}${COLOR.reset}`);
+  console.log(
+    `✅ P2PKH Valid?          : ${COLOR.green}${signer.validateAddress(p2pkh, 'p2pkh').valid}${COLOR.reset}\n`,
+  );
+
+  console.log(`${COLOR.green}🎉✅ Test Completed! (BTC)${COLOR.reset}\n`);
 };
 
 const testTinyEthSecp256k1 = async () => {
-  console.log('\n🔐🔹 TinySecp256k1 ETH Signature Test 🔹🔐\n');
+  console.log(`\n🔐🔹━[ ${COLOR.blue}TinySecp256k1 ETH Signature Test${COLOR.reset} ]━🔹🔐\n`);
 
   const signer = new TinyChain.Eth256k1();
   await signer.init();
@@ -249,31 +281,38 @@ const testTinyEthSecp256k1 = async () => {
   const privateKey = signer.getPrivateKeyHex();
   const publicKey = signer.getAddress();
 
-  console.log('🗝️  Keys (ETH)');
-  console.log('──────────────────────────────');
-  console.log(`🔒 Private Key : ${privateKey}`);
-  console.log(`🔓 Public Key  : ${publicKey}\n`);
+  console.log(`🗝️  ━━━ Keys (ETH) ━━━━━━━━━━━━━━━━`);
+  console.log(`🔒 Private Key           : ${COLOR.yellow}${privateKey}${COLOR.reset}`);
+  console.log(`🔓 Public Key            : ${COLOR.cyan}${publicKey}${COLOR.reset}\n`);
 
   const recoverableMessage = 'Hello world';
-  console.log('♻️  Signing message (ETH)');
-  console.log('──────────────────────────────');
+  console.log(`♻️  ━━━ Signing Message (ETH) ━━━`);
   const sig = signer.signMessage(recoverableMessage);
-  console.log(`📄 Signature (Recoverable): ${sig.toString('hex')}`);
+  console.log(`📄 Signature (Recoverable): ${COLOR.magenta}${sig.toString('hex')}${COLOR.reset}`);
 
   const recoveredPubKey = signer.recoverMessage(recoverableMessage, sig);
-
   const isValid = recoveredPubKey === signer.getAddress();
-  console.log(`🔍 Message Signature Valid? ${isValid}\n`);
-  console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
-  console.log(`🔓 Vanilla Key  :\n`);
-  console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
-  console.log(signer.getPubVanillaAddress().toString('hex'));
+  console.log(
+    `🔍 Recovered Matches?    : ${isValid ? COLOR.green : COLOR.red}${isValid}${COLOR.reset}`,
+  );
+  console.log(`📄 Recovered PubKey      : ${COLOR.cyan}${recoveredPubKey}${COLOR.reset}\n`);
 
-  console.log(`🔓 Validate Address  :\n`);
-  console.log(`${signer.getAddress()} - ${signer.validateAddress(signer.getAddress()).valid}`);
+  console.log('🔓 ━━━ Vanilla Keys ━━━━━━━━━━━━━');
+  console.log(
+    `📦 Vanilla (Address)     : ${COLOR.cyan}${signer.addressToVanilla(signer.getAddress()).toString('hex')}${COLOR.reset}`,
+  );
+  console.log(
+    `📦 Vanilla (PubKey)      : ${COLOR.cyan}${signer.getPubVanillaAddress().toString('hex')}${COLOR.reset}\n`,
+  );
 
-  console.log('✅ Test Completed! (ETH)\n');
+  console.log('🔎 ━━━ Address Validation ━━━━━━━');
+  console.log(`📬 Address               : ${COLOR.cyan}${signer.getAddress()}${COLOR.reset}`);
+  console.log(
+    `✅ Valid?                : ${COLOR.green}${signer.validateAddress(signer.getAddress()).valid}${COLOR.reset}\n`,
+  );
+
+  console.log(`${COLOR.green}🎉✅ Test Completed! (ETH)${COLOR.reset}\n`);
 };
 
 const tinyChainSimulation = async () => {
