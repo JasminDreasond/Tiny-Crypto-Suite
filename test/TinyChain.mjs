@@ -14,8 +14,9 @@ const tinyWalletSimulation = async () => {
   const alice = new TinyChain.Btc256k1();
   const bob = new TinyChain.Btc256k1();
   const charlie = new TinyChain.Btc256k1();
+  const miner = new TinyChain.Btc256k1();
 
-  await Promise.all([adminUser.init(), alice.init(), bob.init(), charlie.init()]);
+  await Promise.all([miner.init(), adminUser.init(), alice.init(), bob.init(), charlie.init()]);
 
   const chainCfg = {
     signer: adminUser,
@@ -53,7 +54,7 @@ const tinyWalletSimulation = async () => {
     ],
   });
 
-  await chain.mineBlock('miner', block1);
+  await chain.mineBlock(miner.getAddress(), block1);
   console.log('✅ Admin forced 5000000n to Alice');
 
   // Alice envia para Bob
@@ -69,7 +70,7 @@ const tinyWalletSimulation = async () => {
     ],
   });
 
-  await chain.mineBlock('miner', block2);
+  await chain.mineBlock(miner.getAddress(), block2);
   console.log('✅ Alice sent 2000000n to Bob');
 
   // Bob tenta enviar dinheiro que não tem de Charlie (deve falhar)
@@ -86,7 +87,7 @@ const tinyWalletSimulation = async () => {
   });
 
   await chain
-    .mineBlock('miner', block3)
+    .mineBlock(miner.getAddress(), block3)
     .catch((err) => console.log("❌ As expected, Bob can't send from Charlie:", err.message));
 
   // Charlie recebe de Bob
@@ -102,7 +103,7 @@ const tinyWalletSimulation = async () => {
     ],
   });
 
-  await chain.mineBlock('miner', block4);
+  await chain.mineBlock(miner.getAddress(), block4);
   console.log('✅ Bob sent 1000000n to Charlie');
 
   // Verificar dados
@@ -140,7 +141,7 @@ const tinyWalletSimulation = async () => {
   const halvingBlocks = [];
   for (let i = 0; i < 20; i++) {
     const block = chain.createBlock({ signer: alice });
-    halvingBlocks.push(chain.mineBlock('miner', block));
+    halvingBlocks.push(chain.mineBlock(miner.getAddress(), block));
   }
   await Promise.all(halvingBlocks);
 
@@ -194,6 +195,9 @@ const tinySignatureTest = async () => {
   console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
   console.log(signer.getPubVanillaAddress().toString('hex'));
 
+  console.log(`🔓 Validate Address  :\n`);
+  console.log(`${signer.getAddress()} - ${signer.validateAddress(signer.getAddress()).valid}`);
+
   console.log('✅ Test Completed!\n');
 };
 
@@ -227,6 +231,12 @@ const tinyBtcSignatureTest = async () => {
   console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
   console.log(signer.getPubVanillaAddress().toString('hex'));
 
+  console.log(`🔓 Validate Address  :\n`);
+  console.log(`${signer.getAddress()} - ${signer.validateAddress(signer.getAddress()).valid}`);
+  console.log(
+    `${signer.getAddress(undefined, 'p2pkh')} - ${signer.validateAddress(signer.getAddress(undefined, 'p2pkh'), 'p2pkh').valid}`,
+  );
+
   console.log('✅ Test Completed! (BTC)\n');
 };
 
@@ -259,6 +269,9 @@ const testTinyEthSecp256k1 = async () => {
   console.log(`🔓 Vanilla Key  :\n`);
   console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
   console.log(signer.getPubVanillaAddress().toString('hex'));
+
+  console.log(`🔓 Validate Address  :\n`);
+  console.log(`${signer.getAddress()} - ${signer.validateAddress(signer.getAddress()).valid}`);
 
   console.log('✅ Test Completed! (ETH)\n');
 };

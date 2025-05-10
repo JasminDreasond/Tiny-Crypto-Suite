@@ -707,13 +707,11 @@ class TinyChainInstance {
 
     const address = signer.getPublicKeyHex();
     const addressType = signer.getType();
-    const execAddress = this.#signer.getAddress(Buffer.from(address, 'hex'), addressType);
-    const isAdmin = this.admins.has(address);
 
     const gasUsed = this.currencyMode ? this.estimateGasUsed(transfers, payload) : 0n;
     if (gasUsed > gasLimit)
       throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
-    if (Array.isArray(transfers)) this.validateTransfers(execAddress, isAdmin, transfers);
+    if (Array.isArray(transfers)) this.validateTransfers(address, addressType, transfers);
 
     const data = {
       transfers,
@@ -853,17 +851,27 @@ class TinyChainInstance {
    * Ensures that each transfer has valid 'from' and 'to' addresses,
    * the sender has enough balance, and non-admins can only transfer their own funds.
    *
-   * @param {string} address - The address type executing the transaction.
-   * @param {boolean} isAdmin - If the address is admin.
+   * @param {string} pubKey - The hex public key executing the transaction.
+   * @param {string} addressType - The address type executing the transaction.
    * @param {NewTransaction[]} transfers - The list of transfers to validate.
    * @param {Balances} [balances] - A mapping of addresses to their balances.
    * @throws {Error} If the list is not an array, if any transfer is malformed,
    * or if the sender is unauthorized or lacks balance.
    */
-  validateTransfers(address, isAdmin, transfers, balances = this.balances) {
+  validateTransfers(pubKey, addressType, transfers, balances = this.balances) {
+    const isAdmin = this.admins.has(pubKey);
+    const address = this.#signer.getAddress(Buffer.from(pubKey, 'hex'), addressType);
+
     if (!Array.isArray(transfers)) throw new Error('Transaction transfers must be an array.');
     for (const { from, to, amount } of transfers) {
-      if (typeof from !== 'string' || typeof to !== 'string' || from.length < 1 || to.length < 1)
+      if (
+        typeof from !== 'string' ||
+        typeof to !== 'string' ||
+        from.length < 1 ||
+        to.length < 1 ||
+        !this.#signer.validateAddress(from, 'guess').valid ||
+        !this.#signer.validateAddress(to, 'guess').valid
+      )
         throw new Error('Invalid from/to address!');
 
       if (!isAdmin && from !== address)
@@ -904,6 +912,10 @@ class TinyChainInstance {
   updateBalance(block, balances = this.balances, emitEvents = true) {
     const reward = block.reward;
     const minerAddress = block.miner;
+    const isMinerAddress = typeof minerAddress === 'string' && minerAddress.length > 0;
+
+    if (isMinerAddress && !this.#signer.validateAddress(minerAddress, 'guess').valid)
+      throw new Error('Invalid miner address!');
     if (typeof reward !== 'bigint')
       throw new Error(`Invalid reward: expected a BigInt, got "${typeof reward}"`);
     if (typeof minerAddress !== 'string' && minerAddress !== null)
@@ -914,16 +926,18 @@ class TinyChainInstance {
     if (Array.isArray(block.data)) {
       let totalGasCollected = 0n;
       for (const data of block.data) {
-        const execAddress = this.#signer.getAddress(Buffer.from(data.address, 'hex'), data.addressType);
-        if (typeof execAddress !== 'string')
-          throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
-        if (execAddress.length < 1) return;
+        if (typeof data.address !== 'string')
+          throw new Error(`Invalid address: expected a string, got "${typeof data.address}"`);
+        if (data.address.length < 1) return;
+
+        const addressType = data.addressType;
+        const execAddress = this.#signer.getAddress(Buffer.from(data.address, 'hex'), addressType);
 
         if (this.currencyMode) {
           const transfers = data.transfers;
           const isAdmin = this.admins.has(data.address);
           if (Array.isArray(transfers))
-            this.validateTransfers(execAddress, isAdmin, transfers, balances);
+            this.validateTransfers(data.address, addressType, transfers, balances);
 
           let totalAmount = 0n;
           // @ts-ignore
@@ -990,8 +1004,7 @@ class TinyChainInstance {
       }
 
       const totalReward = reward + totalGasCollected;
-      const minerAddr =
-        typeof minerAddress === 'string' && minerAddress.length > 0 ? minerAddress : '0';
+      const minerAddr = isMinerAddress ? minerAddress : '0';
       if (!balances[minerAddr]) {
         balances[minerAddr] = 0n;
         if (emitEvents) this.#emit('BalanceStarted', minerAddr, balances[minerAddr]);
@@ -1182,7 +1195,7 @@ class TinyChainInstance {
     if (startIndex < 0 || end >= this.chain.length || startIndex > end)
       throw new Error('Invalid startIndex or endIndex range.');
 
-    return this.chain.slice(startIndex, end + 1).map((b) => b.exportBlock());
+    return this.chain.slice(startIndex, end + 1).map((b) => b.export());
   }
 
   /**

@@ -2,6 +2,12 @@ import { randomBytes, createHash } from 'crypto';
 import { Buffer } from 'buffer';
 
 /**
+ * @typedef {Object} ValidationResult
+ * @property {boolean} valid - Indicates whether the address is valid.
+ * @property {string|null} type - The type of the address if valid (e.g., 'bech32', 'p2pkh').
+ */
+
+/**
  * A minimal wrapper around the `secp256k1` elliptic curve cryptography using the `elliptic` library.
  * Provides functionality for creating and managing an elliptic key pair, signing messages,
  * verifying signatures, and recovering public keys from signed messages.
@@ -358,6 +364,35 @@ class TinySecp256k1 {
     const hash = TinySecp256k1.doubleSha256(msgBuffer);
     const key = ec.keyFromPublic(pubKeyHex, 'hex');
     return key.verify(hash, signatureBuffer);
+  }
+
+  /**
+   * Validates a address.
+   *
+   * @param {string} address - The address string to validate.
+   * @param {string} [type=this.getType()] - The type of address to generate.
+   * @returns {ValidationResult}
+   */
+  // @ts-ignore
+  validateAddress(address, type = this.getType()) {
+    /** @type {ValidationResult} */
+    const result = { valid: false, type: null };
+    const cleanHex = address.startsWith(this.prefix) ? address.slice(this.prefix.length) : address;
+    if (!/^[0-9a-fA-F]+$/.test(cleanHex)) return result;
+
+    const byteLength = cleanHex.length / 2;
+    const prefixByte = cleanHex.slice(0, 2);
+
+    if (prefixByte === '04' && byteLength === 65) {
+      result.valid = true;
+      result.type = 'uncompressed';
+    }
+    if ((prefixByte === '02' || prefixByte === '03') && byteLength === 33) {
+      result.valid = true;
+      result.type = 'compressed';
+    }
+
+    return result;
   }
 
   /**

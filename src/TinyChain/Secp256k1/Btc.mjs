@@ -5,6 +5,7 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
   /** @typedef {import('bs58check/index')} Bs58check */
   /** @typedef {import('bech32/index')} Bech32 */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
+  /** @typedef {import('./index.mjs').ValidationResult} ValidationResult */
   /** @typedef {'p2pkh'|'bech32'} PubKeyTypes */
   p2pkhPrefix = 0x00;
 
@@ -304,6 +305,87 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
       return this.#toHash160[type](address);
     // Nope
     else throw new Error(`Unsupported address type: ${type}`);
+  }
+
+  #validators = {
+    /**
+     * Validates a Bech32 (SegWit) Bitcoin address.
+     *
+     * This function checks whether the provided address is a valid Bech32 address
+     * according to the expected prefix and format. It supports witness version 0
+     * with either a 20-byte (P2WPKH) or 32-byte (P2WSH) program.
+     *
+     * @param {string} address - The address to validate.
+     * @returns {ValidationResult} Object containing validation result, address type, and optional hash.
+     */
+    bech32: (address) => {
+      /** @type {ValidationResult} */
+      const result = { valid: false, type: null };
+
+      const bech32 = this.getBech32();
+      const { prefix, words } = bech32.decode(address);
+      const version = words[0];
+      const program = bech32.fromWords(words.slice(1));
+      if (
+        prefix === this.getPrefix() &&
+        version === 0x00 &&
+        (program.length === 20 || program.length === 32)
+      ) {
+        result.valid = true;
+        result.type = 'bech32';
+      }
+      return result;
+    },
+
+    /**
+     * Validates a Base58Check (P2PKH) Bitcoin address.
+     *
+     * This function checks whether the provided address is a valid legacy P2PKH
+     * Base58Check address using the configured prefix and address length.
+     *
+     * @param {string} address - The address to validate.
+     * @returns {ValidationResult} Object containing validation result, address type, and optional hash.
+     */
+    p2pkh: (address) => {
+      /** @type {ValidationResult} */
+      const result = { valid: false, type: null };
+
+      const bs58check = this.getBs58check();
+      const decoded = bs58check.decode(address);
+      const prefix = decoded[0];
+      if (prefix === this.getP2pkhPrefix() && decoded.length === 21) {
+        result.valid = true;
+        result.type = 'p2pkh';
+      }
+      return result;
+    },
+  };
+
+  /**
+   * Validates a Bitcoin address based on its type (P2PKH or Bech32).
+   * You can use the value "guess".
+   *
+   * @param {string} address - The address string to validate.
+   * @param {string} [type=this.getType()] - The type of address to generate.
+   * @returns {ValidationResult}
+   */
+  // @ts-ignore
+  validateAddress(address, type = this.getType()) {
+    try {
+      if (this.isType(type)) {
+        // @ts-ignore
+        return this.#validators[type](address);
+      } else if (type === 'guess') {
+        for (const type2 in this.#validators) {
+          // @ts-ignore
+          const result = this.#validators[type2](address);
+          if (result.valid) return result;
+        }
+      }
+      return { valid: false, type: null };
+    } catch {
+      return { valid: false, type: null };
+    }
   }
 
   /**

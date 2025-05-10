@@ -406,7 +406,7 @@ class TinyChainBlock {
    * Serializes the block using the parser for export.
    * @returns {string}
    */
-  exportBlock() {
+  export() {
     const data = this.get();
     return this.#parser.serializeDeep(data);
   }

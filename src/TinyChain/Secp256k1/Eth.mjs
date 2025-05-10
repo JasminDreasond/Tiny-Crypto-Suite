@@ -4,6 +4,7 @@ import TinySecp256k1 from './index.mjs';
 class TinyEthSecp256k1 extends TinySecp256k1 {
   /** @typedef {import('js-sha3')} JsSha3 */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
+  /** @typedef {import('./index.mjs').ValidationResult} ValidationResult */
 
   /**
    * Creates an instance of TinyEthSecp256k1.
@@ -157,6 +158,36 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
    */
   addressToVanilla(address) {
     return this.#addressToVanilla(address);
+  }
+
+  /**
+   * Validates a Ethereum address.
+   *
+   * @param {string} address - The address string to validate.
+   * @param {string} [type=this.getType()] - The type of address to generate.
+   * @returns {ValidationResult}
+   */
+  // @ts-ignore
+  validateAddress(address, type = this.getType()) {
+    /** @type {ValidationResult} */
+    const result = { valid: false, type: null };
+    if (typeof address !== 'string') return result;
+
+    const prefix = this.getPrefix();
+    if (!address.startsWith(prefix)) return result;
+
+    const stripped = address.slice(prefix.length);
+    if (!/^[0-9a-fA-F]{40}$/.test(stripped)) return result;
+
+    // Accept lowercase or checksum format, but not mixed invalid case
+    const lower = stripped.toLowerCase();
+    const checksummed = this.#toChecksumAddress(lower);
+    if (address === checksummed || address === prefix + lower) {
+      result.valid = true;
+      result.type = 'keccak256';
+    }
+
+    return result;
   }
 
   /**
