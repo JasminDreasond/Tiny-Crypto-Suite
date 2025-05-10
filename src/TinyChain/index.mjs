@@ -5,6 +5,7 @@ import TinyChainEvents from './Events.mjs';
 import TinyChainBlock from './Block.mjs';
 import TinyChainInstance from './Instance.mjs';
 import TinyEthSecp256k1 from './Secp256k1/Eth.mjs';
+import TinySecp256k1Mock from './Secp256k1/Mock.mjs';
 
 /**
  *
@@ -22,6 +23,7 @@ class TinyChain {
   static Secp256k1 = TinySecp256k1;
   static Btc256k1 = TinyBtcSecp256k1;
   static Eth256k1 = TinyEthSecp256k1;
+  static Mock256k1 = TinySecp256k1Mock;
 
   /**
    * This constructor is intentionally blocked.
