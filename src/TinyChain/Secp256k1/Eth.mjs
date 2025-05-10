@@ -126,8 +126,8 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
    * @param {Buffer} [pubKey=this.getPublicKeyBuffer(false).subarray(1)] - The pubKey buffer (remove byte 0x04).
    * @returns {string}
    */
-  getAddress(pubKey = this.getPublicKeyBuffer(false).subarray(1)) {
-    return this.#getAddress(pubKey);
+  getAddress(pubKey = this.getPublicKeyBuffer(false)) {
+    return this.#getAddress(pubKey.subarray(1));
   }
 
   /**
