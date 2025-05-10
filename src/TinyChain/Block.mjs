@@ -128,7 +128,6 @@ class TinyChainBlock {
    * @throws {Error} If any transfer is invalid or has invalid types.
    */
   #transferValidator(transfers) {
-    if (transfers === undefined) return [];
     if (!Array.isArray(transfers)) throw new Error('Transfers must be an array or undefined.');
     return transfers.map((t, index) => {
       if (typeof t !== 'object' || t === null)
@@ -342,7 +341,7 @@ class TinyChainBlock {
     this.txs = this.#validateTxIndexObject(txs);
     this.sigs = this.#validateSignatureList(sigs);
 
-    if (firstValidation) this.validateBlockContent();
+    if (firstValidation) this.validateSig();
   }
 
   /**
@@ -356,7 +355,7 @@ class TinyChainBlock {
    * @throws {Error} If any transaction has an invalid ECDSA signature or if the
    * number of validated transactions does not match the expected count.
    */
-  validateBlockContent() {
+  validateSig() {
     const dc = this.getData();
     const sigs = this.getSigs();
     for (const index in dc) {
@@ -390,18 +389,18 @@ class TinyChainBlock {
    */
   get() {
     return {
-      chainId: this.chainId,
-      index: this.index,
-      time: this.time,
-      data: this.data,
-      prevHash: this.prevHash,
-      diff: this.diff,
-      nonce: this.nonce,
-      hash: this.hash,
-      reward: this.reward,
-      miner: this.miner,
-      txs: this.txs,
-      sigs: this.sigs,
+      chainId: this.getChainId(),
+      index: this.getIndex(),
+      time: this.getTime(),
+      data: this.getData(),
+      prevHash: this.getPrevHash(),
+      diff: this.getDiff(),
+      nonce: this.getNonce(),
+      hash: this.getHash(),
+      reward: this.getReward(),
+      miner: this.getMiner(),
+      txs: this.getTxs(),
+      sigs: this.getSigs(),
     };
   }
 

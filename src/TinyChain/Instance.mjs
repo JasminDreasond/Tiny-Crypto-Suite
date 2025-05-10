@@ -481,7 +481,8 @@ class TinyChainInstance {
       throw new Error('Blockchain already initialized with a genesis block');
 
     const data = {
-      address: signer.getAddress(),
+      transfers: [],
+      address: signer.getPublicKeyHex(),
       addressType: signer.getType(),
       payload: 'Genesis Block',
       gasLimit: 0n,
@@ -580,14 +581,32 @@ class TinyChainInstance {
    * - If a previous block is provided, its `prevHash` matches the hash of that block
    *
    * @param {TinyChainBlock} current - The block to validate.
-   * @param {TinyChainBlock|null} previous - The previous block in the chain (optional).
+   * @param {TinyChainBlock|null} [previous] - The previous block in the chain (optional).
    * @returns {boolean|null} Returns `true` if valid, `false` if invalid, or `null` if block is missing.
    *
    */
-  #isValidBlock(current, previous) {
+  #isValidBlock(current, previous = null) {
     if (!current) return null;
-    if (current.hash !== current.calculateHash()) return false;
-    if (previous && current.prevHash !== previous.hash) return false;
+    if (!(current instanceof TinyChainBlock))
+      throw new Error('Current block is not a valid TinyChainBlock instance.');
+    try {
+      current.validateSig();
+    } catch {
+      return false;
+    } finally {
+      if (current.hash !== current.calculateHash()) return false;
+      if (previous) {
+        if (!(previous instanceof TinyChainBlock))
+          throw new Error('Previous block is not a valid TinyChainBlock instance.');
+        try {
+          previous.validateSig();
+        } catch {
+          return false;
+        } finally {
+          if (current.prevHash !== previous.hash) return false;
+        }
+      }
+    }
     return true;
   }
 
@@ -620,10 +639,11 @@ class TinyChainInstance {
    * This is typically used before appending a new block to ensure integrity.
    *
    * @param {TinyChainBlock} newBlock - The new block to validate.
+   * @param {TinyChainBlock} [prevBlock=this.getLatestBlock()] - The prev block to validate.
    * @returns {boolean|null} Returns `true` if the new block is valid, otherwise `false` or `null`.
    */
-  isValidNewBlock(newBlock) {
-    return this.#isValidBlock(newBlock, this.getLatestBlock());
+  isValidNewBlock(newBlock, prevBlock = this.getLatestBlock()) {
+    return this.#isValidBlock(newBlock, prevBlock);
   }
 
   /**
