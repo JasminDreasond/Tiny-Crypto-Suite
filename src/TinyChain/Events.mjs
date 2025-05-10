@@ -16,6 +16,39 @@ class TinyChainEvents {
     );
   }
 
+  /** Triggered when initial balances are updated. */
+  static InitialBalancesUpdated = 'InitialBalancesUpdated';
+
+  /** Triggered when the blockchain instance finishes its initialization. */
+  static Initialized = 'Initialized';
+
+  /** Triggered when a new block is successfully added to the chain. */
+  static NewBlock = 'NewBlock';
+
+  /** Triggered when all balances are initialized. */
+  static BalancesInitialized = 'BalancesInitialized';
+
+  /** Triggered when a balance record is first created for an address. */
+  static BalanceStarted = 'BalanceStarted';
+
+  /** Triggered when a balance value is updated for an existing address. */
+  static BalanceUpdated = 'BalanceUpdated';
+
+  /** Triggered when a payload is emitted as part of a block or transaction. */
+  static Payload = 'Payload';
+
+  /** Triggered when the miner's balance is updated after a block is mined. */
+  static MinerBalanceUpdated = 'MinerBalanceUpdated';
+
+  /** Triggered when balances are recalculated during import. */
+  static BalanceRecalculated = 'BalanceRecalculated';
+
+  /** Triggered when the entire blockchain is cleared or reset. */
+  static ChainCleared = 'ChainCleared';
+
+  /** Triggered when a new chain is imported and replaces the current one. */
+  static ImportChain = 'ImportChain';
+
   /**
    * @returns {string[]}
    */

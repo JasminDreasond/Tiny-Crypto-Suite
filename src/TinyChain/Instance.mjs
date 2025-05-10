@@ -3,6 +3,7 @@ import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
+import TinyChainEvents from './Events.mjs';
 import TinyChainBlock from './Block.mjs';
 import TinySecp256k1 from './Secp256k1/index.mjs';
 
@@ -445,7 +446,7 @@ class TinyChainInstance {
     this.initialBalances = initialBalances;
 
     // Emit the event
-    this.#emit('InitialBalancesUpdated', this.initialBalances);
+    this.#emit(TinyChainEvents.InitialBalancesUpdated, this.initialBalances);
   }
 
   /**
@@ -521,7 +522,7 @@ class TinyChainInstance {
   async init(signer = this.#signer) {
     return this.#queue.enqueue(async () => {
       const block = this.#init(signer);
-      this.#emit('Initialized', block);
+      this.#emit(TinyChainEvents.Initialized, block);
     });
   }
 
@@ -767,7 +768,7 @@ class TinyChainInstance {
 
         if (this.currencyMode || this.payloadMode) this.updateBalance(newBlock);
         this.chain.push(newBlock);
-        this.#emit('NewBlock', newBlock);
+        this.#emit(TinyChainEvents.NewBlock, newBlock);
         return newBlock;
       };
       return mineNow();
@@ -797,7 +798,7 @@ class TinyChainInstance {
 
       if (this.currencyMode || this.payloadMode) this.updateBalance(minedBlock);
       this.chain.push(minedBlock);
-      this.#emit('NewBlock', minedBlock);
+      this.#emit(TinyChainEvents.NewBlock, minedBlock);
       return minedBlock;
     });
   }
@@ -837,11 +838,11 @@ class TinyChainInstance {
    */
   startBalances() {
     this.balances = {};
-    this.#emit('BalancesInitialized', this.balances);
+    this.#emit(TinyChainEvents.BalancesInitialized, this.balances);
     if (this.currencyMode) {
       for (const [address, balance] of Object.entries(this.getInitialBalances())) {
         this.balances[address] = BigInt(balance);
-        this.#emit('BalanceStarted', address, this.balances[address]);
+        this.#emit(TinyChainEvents.BalanceStarted, address, this.balances[address]);
       }
     }
   }
@@ -960,7 +961,8 @@ class TinyChainInstance {
 
           if (!balances[execAddress]) {
             balances[execAddress] = 0n;
-            if (emitEvents) this.#emit('BalanceStarted', execAddress, balances[execAddress]);
+            if (emitEvents)
+              this.#emit(TinyChainEvents.BalanceStarted, execAddress, balances[execAddress]);
           }
           const isSufficientBalance = balances[execAddress] >= totalFee ? true : false;
 
@@ -976,11 +978,11 @@ class TinyChainInstance {
             for (const { from, to, amount } of transfers) {
               if (!balances[from]) {
                 balances[from] = 0n;
-                if (emitEvents) this.#emit('BalanceStarted', from, balances[from]);
+                if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, from, balances[from]);
               }
               if (!balances[to]) {
                 balances[to] = 0n;
-                if (emitEvents) this.#emit('BalanceStarted', to, balances[to]);
+                if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, to, balances[to]);
               }
               // @ts-ignore
               balances[from] -= amount;
@@ -990,7 +992,7 @@ class TinyChainInstance {
           }
 
           if (emitEvents)
-            this.#emit('BalanceUpdated', {
+            this.#emit(TinyChainEvents.BalanceUpdated, {
               transfers,
               address: execAddress,
               isAdmin,
@@ -1000,19 +1002,20 @@ class TinyChainInstance {
             });
         }
 
-        if (this.payloadMode && emitEvents) this.#emit('Payload', execAddress, data.payload);
+        if (this.payloadMode && emitEvents)
+          this.#emit(TinyChainEvents.Payload, execAddress, data.payload);
       }
 
       const totalReward = reward + totalGasCollected;
       const minerAddr = isMinerAddress ? minerAddress : '0';
       if (!balances[minerAddr]) {
         balances[minerAddr] = 0n;
-        if (emitEvents) this.#emit('BalanceStarted', minerAddr, balances[minerAddr]);
+        if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, minerAddr, balances[minerAddr]);
       }
       balances[minerAddr] += totalReward;
 
       if (emitEvents)
-        this.#emit('MinerBalanceUpdated', {
+        this.#emit(TinyChainEvents.MinerBalanceUpdated, {
           totalGasCollected,
           reward,
           address: minerAddr,
@@ -1116,7 +1119,7 @@ class TinyChainInstance {
     this.startBalances();
     if (this.currencyMode || this.payloadMode)
       for (const block of this.chain) this.updateBalance(block);
-    this.#emit('BalanceRecalculated', this.balances);
+    this.#emit(TinyChainEvents.BalanceRecalculated, this.balances);
   }
 
   /**
@@ -1176,7 +1179,7 @@ class TinyChainInstance {
   cleanChain() {
     this.chain = [];
     this.balances = {};
-    this.#emit('ChainCleared');
+    this.#emit(TinyChainEvents.ChainCleared);
     this.startBalances();
   }
 
@@ -1219,7 +1222,7 @@ class TinyChainInstance {
     const isValid = this.isValid();
     if (isValid === null) throw new Error('The data chain is null or corrupted.');
     if (!isValid) throw new Error('The data chain is invalid or corrupted.');
-    this.#emit('ImportChain', this.chain);
+    this.#emit(TinyChainEvents.ImportChain, this.chain);
   }
 
   /**
