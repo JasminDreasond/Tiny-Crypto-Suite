@@ -1,4 +1,3 @@
-import { createHash } from 'crypto';
 import { Buffer } from 'buffer';
 import TinySecp256k1 from './index.mjs';
 
@@ -6,23 +5,49 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
   /** @typedef {import('bs58check/index')} Bs58check */
   /** @typedef {import('bech32/index')} Bech32 */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
+  /** @typedef {'p2pkh'|'bech32'} PubKeyTypes */
+  p2pkhPrefix = 0x00;
 
   /**
    * Creates an instance of TinyBtcSecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
    * @param {string|null} [options.prefix='bc'] - Crypto prefix used during message verification.
+   * @param {number|null} [options.p2pkhPrefix=0x00] - Crypto prefix used during message verification.
+   * @param {PubKeyTypes} [options.type=this.getType()] - The type of address to generate.
    * @param {string|null} [options.msgPrefix='Bitcoin Signed Message:\n'] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
   constructor({
+    type = 'bech32',
+    p2pkhPrefix = 0x00,
     prefix = 'bc',
     msgPrefix = 'Bitcoin Signed Message:\n',
     privateKey = null,
     privateKeyEncoding = 'hex',
   } = {}) {
-    super({ prefix, msgPrefix, privateKey, privateKeyEncoding });
+    super({ type, prefix, msgPrefix, privateKey, privateKeyEncoding });
+    if (p2pkhPrefix !== null && typeof p2pkhPrefix !== 'number')
+      throw new Error('p2pkhPrefix must be a number or null');
+    if (typeof p2pkhPrefix === 'number') this.p2pkhPrefix = p2pkhPrefix;
+
+    this.types['bech32'] = this.prefix;
+    this.prefixes[this.types['bech32']] = 'bech32';
+    this.types['p2pkh'] = String(this.p2pkhPrefix);
+    this.prefixes[this.types['p2pkh']] = 'p2pkh';
+  }
+
+  /**
+   * Returns the p2pkh prefix if it's a number.
+   *
+   * @returns {number}
+   * @throws {Error} If p2pkhPrefix is not a number.
+   */
+  getP2pkhPrefix() {
+    if (typeof this.p2pkhPrefix !== 'number')
+      throw new Error('[getP2pkhPrefix] p2pkhPrefix must be a number.');
+    return this.p2pkhPrefix;
   }
 
   /**
@@ -151,16 +176,15 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
   /**
    * Returns the public address derived from the public key.
    *
-   * @param {'p2pkh'|'bech32'} [type='p2pkh'] - The type of address to generate.
-   * @param {boolean} [compressed=true] - Whether to use the compressed version of the public key.
+   * @param {string} [type=this.getType()] - The type of address to generate.
+   * @param {Buffer} [pubKey=this.getPublicKeyBuffer()] - The pubKey buffer.
    * @returns {string} The public address.
    */
-  getAddress(type = 'bech32', compressed = true) {
-    const pubKey = Buffer.from(this.getKeyPair().getPublic(compressed, 'array'));
-    // Bech32
-    if (type === 'bech32') return this.#pubkeyToBech32Address(pubKey);
-    // p2pkh
-    else if (type === 'p2pkh') return this.#pubkeyToP2pkhAddress(pubKey);
+  getAddress(pubKey = this.getPublicKeyBuffer(), type = this.getType()) {
+    // @ts-ignore
+    if (this.isType(type) && typeof this.#pubKeyTo[type] === 'function')
+      // @ts-ignore
+      return this.#pubKeyTo[type](pubKey);
     // Nope
     else throw new Error(`Unsupported address type: ${type}`);
   }
@@ -205,30 +229,81 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
     return TinySecp256k1.doubleSha256(fullMessage);
   }
 
-  /**
-   * Generates P2PKH address from public key
-   * @param {Buffer} pubKey
-   * @returns {string}
-   */
-  #pubkeyToP2pkhAddress(pubKey) {
-    const bs58check = this.getBs58check();
-    const pubkeyHash = TinySecp256k1.hash160(pubKey);
-    const versioned = Buffer.concat([Buffer.from([0x00]), pubkeyHash]); // Mainnet P2PKH
-    return bs58check.encode(versioned);
-  }
+  #pubKeyTo = {
+    /**
+     * Generates P2PKH address from public key
+     * @param {Buffer} pubKey
+     * @returns {string}
+     */
+    p2pkh: (pubKey) => {
+      const bs58check = this.getBs58check();
+      const pubkeyHash = TinySecp256k1.hash160(pubKey);
+      const versioned = Buffer.concat([Buffer.from([this.getP2pkhPrefix()]), pubkeyHash]); // Mainnet P2PKH
+      return bs58check.encode(versioned);
+    },
+
+    /**
+     * Generates Bech32 address from public key
+     * @param {Buffer} pubKey
+     * @returns {string}
+     */
+    bech32: (pubKey) => {
+      const bech32 = this.getBech32();
+      const ripemd160 = TinySecp256k1.hash160(pubKey);
+      // Convert for bech32: witness version 0 + program (ripemd160 result)
+      const words = bech32.toWords(ripemd160);
+      words.unshift(0x00); // witness version
+      return bech32.encode(this.getPrefix(), words); // bc = mainnet
+    },
+  };
+
+  #toHash160 = {
+    /**
+     * Extracts hash160 from a P2PKH address
+     * @param {string} address
+     * @returns {Buffer}
+     */
+    p2pkh: (address) => {
+      const bs58check = this.getBs58check();
+      const decoded = bs58check.decode(address);
+      const prefix = decoded[0];
+      if (prefix !== this.getP2pkhPrefix()) {
+        throw new Error('Invalid prefix for P2PKH address');
+      }
+      return decoded.subarray(1); // remove prefix, return hash160
+    },
+
+    /**
+     * Extracts hash160 from a Bech32 address
+     * @param {string} address
+     * @returns {Buffer}
+     */
+    bech32: (address) => {
+      const bech32 = this.getBech32();
+      const { prefix, words } = bech32.decode(address);
+      if (prefix !== this.getPrefix()) {
+        throw new Error('Invalid Bech32 prefix');
+      }
+      const version = words.shift(); // witness version
+      if (version !== 0x00) throw new Error('Unsupported witness version');
+      return Buffer.from(bech32.fromWords(words)); // this is the original hash160
+    },
+  };
 
   /**
-   * Generates Bech32 address from public key
-   * @param {Buffer} pubKey
-   * @returns {string}
+   * Returns the address in hash160 format.
+   *
+   * @param {string} address - Whether to return the compressed version of the key.
+   * @param {string} [type=this.getType()] - The type of address to generate.
+   * @returns {Buffer} Hash160 representation of the public key.
    */
-  #pubkeyToBech32Address(pubKey) {
-    const bech32 = this.getBech32();
-    const ripemd160 = TinySecp256k1.hash160(pubKey);
-    // Convert for bech32: witness version 0 + program (ripemd160 result)
-    const words = bech32.toWords(ripemd160);
-    words.unshift(0x00); // witness version
-    return bech32.encode(this.prefix, words); // bc = mainnet
+  addressToVanilla(address, type = this.getType()) {
+    // @ts-ignore
+    if (this.isType(type) && typeof this.#toHash160[type] === 'function')
+      // @ts-ignore
+      return this.#toHash160[type](address);
+    // Nope
+    else throw new Error(`Unsupported address type: ${type}`);
   }
 
   /**
@@ -237,13 +312,14 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
    * @param {string|Buffer} message - The original message.
    * @param {string|Buffer} signature - Signature in DER format (base64-encoded or Buffer).
    * @param {Object} [options] - Verification options.
+   * @param {PubKeyTypes} [options.type=this.getType()] - The type of address to generate.
    * @param {BufferEncoding} [options.encoding='base64'] - Encoding of the signature if it's a string.
-   * @param {string} [options.prefix=this.msgPrefix] - Message prefix.
+   * @param {string} [options.prefix=this.getMsgPrefix()] - Message prefix.
    * @returns {string|null} The recovered compressed public key in hex format, or null if recovery fails.
    */
   recoverMessage(message, signature, options = {}) {
     const ec = this.getEc();
-    const { encoding = 'utf8', prefix = this.msgPrefix } = options;
+    const { encoding = 'utf8', prefix = this.getMsgPrefix(), type = this.getType() } = options;
     const sigBuf = typeof signature === 'string' ? Buffer.from(signature, encoding) : signature;
     const msgHash = this.#getMessageHash(message, prefix);
     if (sigBuf.length !== 65) return null;
@@ -253,7 +329,13 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
     const r = sigBuf.subarray(1, 33);
     const s = sigBuf.subarray(33, 65);
     const pubKey = ec.recoverPubKey(msgHash, { r, s }, recid);
-    return this.#pubkeyToBech32Address(Buffer.from(pubKey.encodeCompressed()));
+
+    // @ts-ignore
+    if (this.isType(type) && typeof this.#pubKeyTo[type] === 'function')
+      // @ts-ignore
+      return this.#pubKeyTo[type](Buffer.from(pubKey.encodeCompressed()));
+    // Nope
+    else throw new Error(`Unsupported address type: ${type}`);
   }
 
   /**
@@ -268,7 +350,7 @@ class TinyBtcSecp256k1 extends TinySecp256k1 {
    */
   signMessage(message, options = {}) {
     const keyPair = this.getKeyPair();
-    const { prefix = this.msgPrefix } = options;
+    const { prefix = this.getMsgPrefix() } = options;
     const hash = this.#getMessageHash(message, prefix);
 
     const signature = keyPair.sign(hash, { canonical: true });

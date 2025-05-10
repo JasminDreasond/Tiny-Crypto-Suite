@@ -1,8 +1,10 @@
+import { Buffer } from 'buffer';
 import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
 import TinyChainBlock from './Block.mjs';
+import TinySecp256k1 from './Secp256k1/index.mjs';
 
 /**
  * A mapping of addresses to their balances.
@@ -44,9 +46,13 @@ import TinyChainBlock from './Block.mjs';
  * @beta
  */
 class TinyChainInstance {
+  /** @typedef {import('./Block.mjs').NewTransaction} NewTransaction */
   /** @typedef {import('./Block.mjs').Transaction} Transaction */
   /** @typedef {import('./Block.mjs').TransactionData} TransactionData */
   /** @typedef {import('./Block.mjs').GetTransactionData} GetTransactionData */
+  /** @typedef {import('./Block.mjs').BlockInitData} BlockInitData */
+
+  #signer;
 
   /**
    * Important instance used to make event emitter.
@@ -166,33 +172,12 @@ class TinyChainInstance {
     return this.#parser.addValueType(typeName, getFunction, convertFunction);
   }
 
-  #createGenesisBlock() {
-    return this.#createBlockInstance({
-      index: 0n,
-      previousHash: '0',
-      data: [
-        {
-          timestamp: Date.now(),
-          address: '0',
-          payload: 'Genesis Block',
-          gasLimit: 0n,
-          gasUsed: 0n,
-          baseFeePerGas: 0n,
-          maxFeePerGas: 0n,
-          maxPriorityFeePerGas: 0n,
-          miner: null,
-          hash: null,
-        },
-      ],
-    });
-  }
-
   /**
    * Checks whether the blockchain has a valid genesis block.
    *
    * A genesis block is identified by having:
    * - index equal to 0n
-   * - previousHash equal to `'0'`
+   * - prevHash equal to `'0'`
    * - at least one data entry
    * - the first data entry's `address` equal to `'0'`
    *
@@ -203,7 +188,7 @@ class TinyChainInstance {
     const firstBlock = this.getFirstBlock();
     return (
       firstBlock.index === 0n &&
-      firstBlock.previousHash === '0' &&
+      firstBlock.prevHash === '0' &&
       firstBlock.data[0] &&
       firstBlock.data[0].address === '0'
     );
@@ -232,6 +217,7 @@ class TinyChainInstance {
    * registered immediately.
    *
    * @param {Object} [options] - Configuration options for the blockchain instance.
+   * @param {TinySecp256k1} [options.signer] - Signer instance for cryptographic operations.
    * @param {string|number|bigint} [options.chainId=0] - The chain ID.
    * @param {string|number|bigint} [options.transferGas=15000] - Fixed gas cost per transfer operation (symbolic).
    * @param {string|number|bigint} [options.baseFeePerGas=21000] - Base gas fee per unit (in gwei).
@@ -244,11 +230,12 @@ class TinyChainInstance {
    * @param {string|number|bigint} [options.halvingInterval=100] - Block interval for reward halving logic.
    * @param {string|number|bigint} [options.lastBlockReward=1000] - Reward for the last mined block.
    * @param {Balances} [options.initialBalances={}] - Optional mapping of initial addresses to balances.
-   * @param {string[]} [options.admins=[]] - List of admin addresses granted elevated permissions.
+   * @param {string[]} [options.admins=[]] - List of admin public keys granted elevated permissions.
    *
    * @throws {Error} Throws an error if any parameter has an invalid type or value.
    */
   constructor({
+    signer,
     chainId = 0,
     transferGas = 15000, // symbolic per transfer, varies in real EVM
     baseFeePerGas = 21000,
@@ -266,6 +253,8 @@ class TinyChainInstance {
     // Validation for each parameter
     if (typeof chainId !== 'bigint' && typeof chainId !== 'number' && typeof chainId !== 'string')
       throw new Error('Invalid type for chainId. Expected bigint, number, or string.');
+    if (typeof signer !== 'object')
+      throw new Error('Invalid type for signer. Expected a TinySecp256k1.');
     if (
       typeof transferGas !== 'bigint' &&
       typeof transferGas !== 'number' &&
@@ -324,6 +313,12 @@ class TinyChainInstance {
     });
 
     /**
+     * The signer instance used for cryptographic operations.
+     * @type {TinySecp256k1}
+     */
+    this.#signer = signer;
+
+    /**
      * Whether the payload should be stored as a string or not.
      * Controls the serialization behavior of block payloads.
      *
@@ -332,7 +327,7 @@ class TinyChainInstance {
     this.#payloadString = payloadString;
 
     /**
-     * A set of administrator addresses with elevated privileges.
+     * A set of administrator public keys with elevated privileges.
      *
      * @type {Set<string>}
      */
@@ -479,14 +474,36 @@ class TinyChainInstance {
    * before creating the genesis block. If the chain already contains blocks,
    * an error is thrown. The created genesis block is added to the chain and returned.
    *
+   * @param {TinySecp256k1} [signer=this.#sender] - The address that is executing the block, typically the transaction sender.
+   *
    * @returns {TinyChainBlock} The genesis block that was created and added to the chain.
    * @throws {Error} If the blockchain already contains a genesis block.
    *
    */
-  #init() {
+  #init(signer = this.#signer) {
     if (this.chain.length > 0)
       throw new Error('Blockchain already initialized with a genesis block');
-    const block = this.#createGenesisBlock();
+
+    const data = {
+      address: signer.getAddress(),
+      addressType: signer.getType(),
+      payload: 'Genesis Block',
+      gasLimit: 0n,
+      gasUsed: 0n,
+      baseFeePerGas: 0n,
+      maxFeePerGas: 0n,
+      maxPriorityFeePerGas: 0n,
+    };
+
+    const sig = signer.signECDSA(this.#parser.serializeDeep(data), 'utf-8');
+
+    const block = this.#createBlockInstance({
+      index: 0n,
+      prevHash: '0',
+      firstValidation: false,
+      data: [data],
+      sigs: [sig.toString('hex')],
+    });
     this.chain.push(block);
     return block;
   }
@@ -498,13 +515,15 @@ class TinyChainInstance {
    * exclusive access during the setup phase. It emits an `Initialized` event
    * once the genesis block has been created and added to the chain.
    *
+   * @param {TinySecp256k1} [signer=this.#sender] - The address that is executing the block, typically the transaction sender.
+   *
    * @returns {Promise<void>} A promise that resolves once initialization is complete.
    *
    * @emits Initialized - When the genesis block is successfully created and added.
    */
-  async init() {
+  async init(signer = this.#signer) {
     return this.#queue.enqueue(async () => {
-      const block = this.#init();
+      const block = this.#init(signer);
       this.#emit('Initialized', block);
     });
   }
@@ -516,7 +535,7 @@ class TinyChainInstance {
    * internal configuration such as `payloadString` and `parser`, and merging any
    * additional options provided by the caller.
    *
-   * @param {Object} options - Additional block options to override or extend defaults.
+   * @param {BlockInitData} options - Additional block options to override or extend defaults.
    * @returns {TinyChainBlock} A new instance of the TinyChainBlock.
    *
    */
@@ -524,6 +543,7 @@ class TinyChainInstance {
     return new TinyChainBlock({
       payloadString: this.#payloadString,
       parser: this.#parser,
+      signer: this.#signer,
       chainId: this.chainId,
       ...options,
     });
@@ -549,15 +569,15 @@ class TinyChainInstance {
    * Simulates gas estimation for an Ethereum-like transaction.
    * Considers base cost, data size, and per-transfer cost.
    * @param {Transaction[]} transfers - List of transfers (e.g., token or balance movements).
-   * @param {any} payloadData - Data to be included in the transaction (e.g., contract call).
+   * @param {any} payload - Data to be included in the transaction (e.g., contract call).
    * @returns {bigint}
    */
-  estimateGasUsed(transfers, payloadData) {
+  estimateGasUsed(transfers, payload) {
     const ZERO_BYTE_COST = 4n;
     const NONZERO_BYTE_COST = 16n;
 
     // Serialize and calculate gas per byte (mimicking Ethereum rules)
-    const serialized = this.#parser.serializeDeep(payloadData);
+    const serialized = this.#parser.serializeDeep(payload);
     let dataGas = 0n;
     for (let i = 0; i < serialized.length; i++) {
       // @ts-ignore
@@ -577,7 +597,7 @@ class TinyChainInstance {
    * A block is considered valid if:
    * - It exists
    * - Its stored hash matches its recalculated hash
-   * - If a previous block is provided, its `previousHash` matches the hash of that block
+   * - If a previous block is provided, its `prevHash` matches the hash of that block
    *
    * @param {TinyChainBlock} current - The block to validate.
    * @param {TinyChainBlock|null} previous - The previous block in the chain (optional).
@@ -587,7 +607,7 @@ class TinyChainInstance {
   #isValidBlock(current, previous) {
     if (!current) return null;
     if (current.hash !== current.calculateHash()) return false;
-    if (previous && current.previousHash !== previous.hash) return false;
+    if (previous && current.prevHash !== previous.hash) return false;
     return true;
   }
 
@@ -627,6 +647,24 @@ class TinyChainInstance {
   }
 
   /**
+   * Checks whether the new block has a valid previous hash.
+   *
+   * This ensures the block references a previous block and is not the genesis block.
+   *
+   * @param {TinyChainBlock} newBlock - The block to check.
+   * @returns {boolean} Returns `true` if the previous hash is valid, otherwise `false`.
+   */
+  existsPrevBlock(newBlock) {
+    if (
+      typeof newBlock.prevHash !== 'string' ||
+      newBlock.prevHash.trim().length < 1 ||
+      newBlock.prevHash === '0'
+    )
+      return false;
+    return true;
+  }
+
+  /**
    * Calculates the current block reward based on the chain height and halving intervals.
    *
    * The reward starts at `initialReward` and is halved every `halvingInterval` blocks.
@@ -649,22 +687,17 @@ class TinyChainInstance {
    * The method will validate the address, estimate the gas used for the transactions, and ensure that the gas
    * limit is not exceeded before creating the block. It also includes reward information if `currencyMode` is enabled.
    *
-   * @param {string} execAddress - The address that is executing the block, typically the transaction sender.
-   * @param {string} [payloadData=''] - The data to be included in the block's payload. Default is an empty string.
-   * @param {Array<Transaction>} [transfers=[]] - The list of transfers (transactions) to be included in the block.
-   * @param {GasConfig} [gasOptions={}] - Optional gas-related configuration.
+   * @param {Object} [options={}] - Block options.
+   * @param {TinySecp256k1} [options.signer=this.#sender] - The address that is executing the block, typically the transaction sender.
+   * @param {string} [options.payload=''] - The data to be included in the block's payload. Default is an empty string.
+   * @param {Array<Transaction>} [options.transfers=[]] - The list of transfers (transactions) to be included in the block.
+   * @param {GasConfig} [options.gasOptions={}] - Optional gas-related configuration.
    *
    * @returns {TinyChainBlock} The newly created block instance with all the relevant data.
    *
    * @throws {Error} Throws an error if the `execAddress` is invalid or if the gas limit is exceeded.
    */
-  createBlock(execAddress, payloadData = '', transfers = [], gasOptions = {}) {
-    if (typeof execAddress !== 'string')
-      throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
-
-    if (execAddress.trim().length === 0)
-      throw new Error('Invalid address: address string cannot be empty or only whitespace');
-
+  createBlock({ signer = this.#signer, payload = '', transfers = [], gasOptions = {} } = {}) {
     const reward = this.currencyMode ? this.getCurrentReward() : 0n;
     const {
       gasLimit = 50000n,
@@ -672,25 +705,33 @@ class TinyChainInstance {
       maxPriorityFeePerGas = this.priorityFeeDefault,
     } = gasOptions;
 
-    const gasUsed = this.currencyMode ? this.estimateGasUsed(transfers, payloadData) : 0n;
+    const address = signer.getPublicKeyHex();
+    const addressType = signer.getType();
+    const execAddress = this.#signer.getAddress(Buffer.from(address, 'hex'), addressType);
+    const isAdmin = this.admins.has(address);
+
+    const gasUsed = this.currencyMode ? this.estimateGasUsed(transfers, payload) : 0n;
     if (gasUsed > gasLimit)
       throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
+    if (Array.isArray(transfers)) this.validateTransfers(execAddress, isAdmin, transfers);
+
+    const data = {
+      transfers,
+      address,
+      addressType,
+      payload,
+      gasLimit: this.currencyMode ? gasLimit : 0n,
+      gasUsed,
+      baseFeePerGas: this.currencyMode ? this.baseFeePerGas : 0n,
+      maxFeePerGas: this.currencyMode ? maxFeePerGas : 0n,
+      maxPriorityFeePerGas: this.currencyMode ? maxPriorityFeePerGas : 0n,
+    };
+
+    const sig = signer.signECDSA(this.#parser.serializeDeep(data), 'utf-8');
 
     return this.#createBlockInstance({
-      data: [
-        {
-          transfers,
-          address: execAddress,
-          payload: payloadData,
-          gasLimit: this.currencyMode ? gasLimit : 0n,
-          gasUsed,
-          baseFeePerGas: this.currencyMode ? this.baseFeePerGas : 0n,
-          maxFeePerGas: this.currencyMode ? maxFeePerGas : 0n,
-          maxPriorityFeePerGas: this.currencyMode ? maxPriorityFeePerGas : 0n,
-          miner: null,
-          hash: null,
-        },
-      ],
+      data: [data],
+      sigs: [sig.toString('hex')],
       difficulty: this.difficulty,
       reward,
     });
@@ -718,7 +759,7 @@ class TinyChainInstance {
       const mineNow = async () => {
         const previousBlock = this.getLatestBlock();
         const result = await newBlock.mine(minerAddress, {
-          previousHash: previousBlock.hash,
+          prevHash: previousBlock.hash,
           index: previousBlock.index + 1n,
         });
 
@@ -808,6 +849,33 @@ class TinyChainInstance {
   }
 
   /**
+   * Validates a list of transfers for a transaction.
+   * Ensures that each transfer has valid 'from' and 'to' addresses,
+   * the sender has enough balance, and non-admins can only transfer their own funds.
+   *
+   * @param {string} address - The address type executing the transaction.
+   * @param {boolean} isAdmin - If the address is admin.
+   * @param {NewTransaction[]} transfers - The list of transfers to validate.
+   * @param {Balances} [balances] - A mapping of addresses to their balances.
+   * @throws {Error} If the list is not an array, if any transfer is malformed,
+   * or if the sender is unauthorized or lacks balance.
+   */
+  validateTransfers(address, isAdmin, transfers, balances = this.balances) {
+    if (!Array.isArray(transfers)) throw new Error('Transaction transfers must be an array.');
+    for (const { from, to, amount } of transfers) {
+      if (typeof from !== 'string' || typeof to !== 'string' || from.length < 1 || to.length < 1)
+        throw new Error('Invalid from/to address!');
+
+      if (!isAdmin && from !== address)
+        throw new Error(`Non-admins can only send their own balance.`);
+
+      // @ts-ignore
+      if (typeof balances[from] !== 'bigint' || balances[from] < amount)
+        throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
+    }
+  }
+
+  /**
    * Updates the balances of addresses involved in the block, including gas fees and transfers.
    *
    * This method handles updating the balances for the addresses involved in the block's transactions.
@@ -846,32 +914,16 @@ class TinyChainInstance {
     if (Array.isArray(block.data)) {
       let totalGasCollected = 0n;
       for (const data of block.data) {
-        const execAddress = data.address;
+        const execAddress = this.#signer.getAddress(Buffer.from(data.address, 'hex'), data.addressType);
         if (typeof execAddress !== 'string')
           throw new Error(`Invalid address: expected a string, got "${typeof execAddress}"`);
         if (execAddress.length < 1) return;
 
         if (this.currencyMode) {
           const transfers = data.transfers;
-          const isAdmin = this.admins.has(execAddress);
-          if (Array.isArray(transfers)) {
-            for (const { from, to, amount } of transfers) {
-              if (
-                typeof from !== 'string' ||
-                typeof to !== 'string' ||
-                from.length < 1 ||
-                to.length < 1
-              )
-                throw new Error('Invalid from/to address!');
-
-              if (!isAdmin && from !== execAddress)
-                throw new Error(`Non-admins can only send their own balance.`);
-
-              // @ts-ignore
-              if (typeof balances[from] !== 'bigint' || balances[from] < amount)
-                throw new Error(`Insufficient balance for user "${from}" (needs ${amount})`);
-            }
-          }
+          const isAdmin = this.admins.has(data.address);
+          if (Array.isArray(transfers))
+            this.validateTransfers(execAddress, isAdmin, transfers, balances);
 
           let totalAmount = 0n;
           // @ts-ignore
@@ -1211,6 +1263,14 @@ class TinyChainInstance {
    */
   getLastBlockReward() {
     return this.lastBlockReward;
+  }
+
+  /**
+   * Returns the chain ID.
+   * @returns {bigint}
+   */
+  getChainId() {
+    return this.chainId;
   }
 
   /**

@@ -10,17 +10,22 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
    *
    * @param {Object} [options] - Optional parameters for the instance.
    * @param {string|null} [options.prefix='0x'] - Crypto prefix used during message verification.
+   * @param {'keccak256'} [options.type='keccak256'] - The type of address to generate.
    * @param {string|null} [options.msgPrefix='\x19Ethereum Signed Message:\n'] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
   constructor({
     prefix = '0x',
+    type = 'keccak256',
     msgPrefix = '\x19Ethereum Signed Message:\n',
     privateKey = null,
     privateKeyEncoding = 'hex',
   } = {}) {
-    super({ prefix, msgPrefix, privateKey, privateKeyEncoding });
+    super({ type, prefix, msgPrefix, privateKey, privateKeyEncoding });
+
+    this.types['keccak256'] = this.prefix;
+    this.prefixes[this.types['keccak256']] = 'keccak256';
   }
 
   /**
@@ -77,15 +82,6 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
   }
 
   /**
-   * Returns the public key as a buffer.
-   * @param {boolean} [compressed=false] - Ethereum não usa chaves comprimidas.
-   * @returns {Buffer}
-   */
-  #getPublicKeyBuffer(compressed = false) {
-    return Buffer.from(this.getKeyPair().getPublic(compressed, 'array'));
-  }
-
-  /**
    * Apply EIP-55 checksum to a lowercase address.
    * @param {string} address - Hex string without 0x prefix.
    * @returns {string}
@@ -93,7 +89,7 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
   #toChecksumAddress(address) {
     const { keccak256 } = this.getJsSha3();
     const hash = keccak256(address.toLowerCase());
-    let checksumAddress = this.prefix;
+    let checksumAddress = this.getPrefix();
     for (let i = 0; i < address.length; i++) {
       const char = address[i];
       const hashChar = parseInt(hash[i], 16);
@@ -126,11 +122,41 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
 
   /**
    * Generate the Ethereum address from the public key.
+   * @param {Buffer} [pubKey=this.getPublicKeyBuffer(false).subarray(1)] - The pubKey buffer (remove byte 0x04).
    * @returns {string}
    */
-  getAddress() {
-    const pubKey = this.#getPublicKeyBuffer(false).subarray(1); // remove byte 0x04
+  getAddress(pubKey = this.getPublicKeyBuffer(false).subarray(1)) {
     return this.#getAddress(pubKey);
+  }
+
+  /**
+   * Returns the public key in vanilla format.
+   *
+   * @returns {Buffer} Hash160 representation of the public key.
+   */
+  getPubVanillaAddress() {
+    return this.#addressToVanilla(this.getAddress());
+  }
+
+  /**
+   * @param {string} address
+   * @returns {Buffer}
+   */
+  #addressToVanilla(address) {
+    let addr = '';
+    if (address.startsWith(this.getPrefix())) addr = address.slice(this.getPrefix().length);
+    if (addr.length !== 40) throw new Error('Invalid Ethereum address length');
+    return Buffer.from(addr, 'hex');
+  }
+
+  /**
+   * Returns the address in keccak256 format.
+   *
+   * @param {string} address - Whether to return the compressed version of the key.
+   * @returns {Buffer} - Hash160 representation of the public key.
+   */
+  addressToVanilla(address) {
+    return this.#addressToVanilla(address);
   }
 
   /**
@@ -144,7 +170,7 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
   signMessage(message, options = {}) {
     const { keccak256 } = this.getJsSha3();
     const keyPair = this.getKeyPair();
-    const { prefix = this.msgPrefix, encoding = 'utf8' } = options;
+    const { prefix = this.getMsgPrefix(), encoding = 'utf8' } = options;
     const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message, encoding);
     const ethMessage = Buffer.concat([Buffer.from(`${prefix}${msgBuffer.length}`), msgBuffer]);
     const msgHash = Buffer.from(keccak256.arrayBuffer(ethMessage));
@@ -175,7 +201,7 @@ class TinyEthSecp256k1 extends TinySecp256k1 {
    */
   recoverMessage(message, signature, options = {}) {
     const { keccak256 } = this.getJsSha3();
-    const { prefix = this.msgPrefix, encoding = 'utf8' } = options;
+    const { prefix = this.getMsgPrefix(), encoding = 'utf8' } = options;
     const sigBuf = typeof signature === 'string' ? Buffer.from(signature, 'hex') : signature;
     if (sigBuf.length !== 65) return null;
 

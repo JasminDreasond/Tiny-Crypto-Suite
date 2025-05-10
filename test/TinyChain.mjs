@@ -10,18 +10,26 @@ const colorSafeStringify = (json) => colorJsonSafe.colorize(stringify(json, null
 const tinyWalletSimulation = async () => {
   console.log('🌱 Initializing test blockchain...');
 
+  const adminUser = new TinyChain.Btc256k1();
+  const alice = new TinyChain.Btc256k1();
+  const bob = new TinyChain.Btc256k1();
+  const charlie = new TinyChain.Btc256k1();
+
+  await Promise.all([adminUser.init(), alice.init(), bob.init(), charlie.init()]);
+
   const chainCfg = {
+    signer: adminUser,
     currencyMode: true,
     payloadMode: true,
     difficulty: 1,
-    admins: ['adminUser'],
+    admins: [adminUser.getPublicKeyHex()],
     initialBalances: {
-      alice: 1000000000n,
-      bob: 1000000000n,
-      charlie: 1000000000n,
-      adminUser: 1000000000n,
+      [alice.getAddress()]: 1000000000n,
+      [bob.getAddress()]: 1000000000n,
+      [charlie.getAddress()]: 1000000000n,
+      [adminUser.getAddress()]: 1000000000n,
     },
-    halvingInterval: 3, // A cada 3 blocos
+    halvingInterval: 3,
   };
 
   const chain = new TinyChain.Instance(chainCfg);
@@ -33,50 +41,66 @@ const tinyWalletSimulation = async () => {
     console.log(`   - ${user}: ${balance}`);
 
   // Admin envia saldo para Alice à força
-  const block1 = chain.createBlock('adminUser', 'Admin enters here', [
-    {
-      from: 'alice',
-      to: 'bob',
-      amount: 5000000n,
-    },
-  ]);
+  const block1 = chain.createBlock({
+    signer: adminUser,
+    payload: 'Admin enters here',
+    transfers: [
+      {
+        from: alice.getAddress(),
+        to: bob.getAddress(),
+        amount: 5000000n,
+      },
+    ],
+  });
 
   await chain.mineBlock('miner', block1);
   console.log('✅ Admin forced 5000000n to Alice');
 
   // Alice envia para Bob
-  const block2 = chain.createBlock('alice', 'Alice builds', [
-    {
-      from: 'alice',
-      to: 'bob',
-      amount: 2000000n,
-    },
-  ]);
+  const block2 = chain.createBlock({
+    signer: alice,
+    payload: 'Alice builds',
+    transfers: [
+      {
+        from: alice.getAddress(),
+        to: bob.getAddress(),
+        amount: 2000000n,
+      },
+    ],
+  });
 
   await chain.mineBlock('miner', block2);
   console.log('✅ Alice sent 2000000n to Bob');
 
   // Bob tenta enviar dinheiro que não tem de Charlie (deve falhar)
-  const block3 = chain.createBlock('bob', 'Bob pays fail', [
-    {
-      from: 'charlie',
-      to: 'bob',
-      amount: 500000n,
-    },
-  ]);
+  const block3 = chain.createBlock({
+    signer: charlie,
+    payload: 'Bob pays fail',
+    transfers: [
+      {
+        from: charlie.getAddress(),
+        to: bob.getAddress(),
+        amount: 500000n,
+      },
+    ],
+  });
 
   await chain
     .mineBlock('miner', block3)
     .catch((err) => console.log("❌ As expected, Bob can't send from Charlie:", err.message));
 
   // Charlie recebe de Bob
-  const block4 = chain.createBlock('bob', 'Bob pays back', [
-    {
-      from: 'bob',
-      to: 'charlie',
-      amount: 1000000n,
-    },
-  ]);
+  const block4 = chain.createBlock({
+    signer: bob,
+    payload: 'Bob pays back',
+    transfers: [
+      {
+        from: bob.getAddress(),
+        to: charlie.getAddress(),
+        amount: 1000000n,
+      },
+    ],
+  });
 
   await chain.mineBlock('miner', block4);
   console.log('✅ Bob sent 1000000n to Charlie');
@@ -115,7 +139,7 @@ const tinyWalletSimulation = async () => {
   // Testar halving do reward (3 blocos = reward cai)
   const halvingBlocks = [];
   for (let i = 0; i < 20; i++) {
-    const block = chain.createBlock('alice');
+    const block = chain.createBlock({ signer: alice });
     halvingBlocks.push(chain.mineBlock('miner', block));
   }
   await Promise.all(halvingBlocks);
@@ -166,6 +190,10 @@ const tinySignatureTest = async () => {
   console.log(`🔍 Message Signature Valid? ${isValid}\n`);
   console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
+  console.log(`🔓 Hash160 Key  :\n`);
+  console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
+  console.log(signer.getPubVanillaAddress().toString('hex'));
+
   console.log('✅ Test Completed!\n');
 };
 
@@ -195,6 +223,10 @@ const tinyBtcSignatureTest = async () => {
   console.log(`🔍 Message Signature Valid? ${isValid}\n`);
   console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
 
+  console.log(`🔓 Hash160 Key  :\n`);
+  console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
+  console.log(signer.getPubVanillaAddress().toString('hex'));
+
   console.log('✅ Test Completed! (BTC)\n');
 };
 
@@ -223,6 +255,10 @@ const testTinyEthSecp256k1 = async () => {
   const isValid = recoveredPubKey === signer.getAddress();
   console.log(`🔍 Message Signature Valid? ${isValid}\n`);
   console.log(`📄 Message Signature (Recoverable): ${recoveredPubKey}`);
+
+  console.log(`🔓 Vanilla Key  :\n`);
+  console.log(signer.addressToVanilla(signer.getAddress()).toString('hex'));
+  console.log(signer.getPubVanillaAddress().toString('hex'));
 
   console.log('✅ Test Completed! (ETH)\n');
 };

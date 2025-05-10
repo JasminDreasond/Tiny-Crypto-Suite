@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { Buffer } from 'buffer';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
+import TinySecp256k1 from './Secp256k1/index.mjs';
 
 /**
  * @typedef {Object} NewTransaction
@@ -23,9 +24,10 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  * @property {bigint | number | string} baseFeePerGas - Base fee per gas unit.
  * @property {bigint | number | string} maxPriorityFeePerGas - Priority fee paid to the miner.
  * @property {bigint | number | string} maxFeePerGas - Max total fee per gas unit allowed.
- * @property {string} address - Address that created the block.
+ * @property {string} address - Hex address that created the tx.
+ * @property {string} addressType - Address type that created the tx.
  * @property {*} payload - Payload content (usually a string).
- * @property {Array<NewTransaction>} transfers - Transfer list.
+ * @property {Array<NewTransaction>} [transfers] - Transfer list.
  */
 
 /**
@@ -35,17 +37,39 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  * @property {bigint} baseFeePerGas - Base fee per gas unit.
  * @property {bigint} maxPriorityFeePerGas - Priority fee paid to the miner.
  * @property {bigint} maxFeePerGas - Max total fee per gas unit allowed.
- * @property {string} address - Address that created the block.
+ * @property {string} address - Hex address that created the block.
+ * @property {string} addressType - Address type that created the block.
  * @property {*} payload - Payload content (usually a string).
  * @property {Array<NewTransaction>} transfers - Transfer list.
  */
 
 /**
+ * Creates a new instance of a block with all necessary data and gas configuration.
+ *
+ * @typedef {Object} BlockInitData - Configuration object.
+ * @property {boolean} [firstValidation=true] - The first validation of the block must be performed.
+ * @property {boolean} [payloadString=true] - If true, payload must be a string.
+ * @property {TinySecp256k1} [signer] - Signer instance for cryptographic operations.
+ * @property {TinyCryptoParser} [parser] - Parser instance used for deep serialization.
+ * @property {bigint | number | string} [index=0n] - Block index.
+ * @property {string} [options.prevHash=''] - Hash of the previous block.
+ * @property {bigint | number | string} [difficulty=1n] - Mining difficulty.
+ * @property {bigint | number | string} [reward=0n] - Block reward.
+ * @property {bigint | number | string} [nonce=0n] - Starting nonce.
+ * @property {bigint | number | string} [chainId] - The chain ID.
+ * @property {TxIndexMap} [txs] - A map where each key is a transaction index.
+ * @property {SignIndexMap} [sigs] - A map where each key is a transaction signature.
+ * @property {number} [timestamp=Date.now()] - Unix timestamp of the block.
+ * @property {string|null} [hash=null] - Optional precomputed hash.
+ * @property {string|null} [miner=null] - Address of the miner.
+ * @property {NewTransactionData[]} [data=[]] - Block data.
+ */
+/**
  * @typedef {{
  *   index: bigint,
  *   timestamp: number,
  *   data: TransactionData[],
- *   previousHash: string|null,
+ *   prevHash: string|null,
  *   difficulty: bigint,
  *   nonce: bigint,
  *   hash: string,
@@ -53,12 +77,18 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  *   miner: string|null,
  *   chainId: bigint,
  *   txs: TxIndexMap,
+ *   sigs: SignIndexMap,
  * }} GetTransactionData
  */
 
 /**
  * @typedef {Record.<string, number>} TxIndexMap
- * A map where each key is a transaction index (as a string) and the value is the transaction ID (string or number).
+ * A map where each key is a transaction index and the value is the transaction ID.
+ */
+
+/**
+ * @typedef {Array<string>} SignIndexMap
+ * A map where each key is a transaction index and the value is the signature in hex.
  */
 
 /**
@@ -70,7 +100,7 @@ import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
  * hashes. It is designed to be immutable after mining and stores
  * calculated fees used to incentivize miners.
  *
- * This class assumes values like `index`, `previousHash`, and `minerAddress`
+ * This class assumes values like `index`, `prevHash`, and `minerAddress`
  * are externally controlled and trusted when mining or constructing blocks.
  *
  * @class
@@ -81,6 +111,12 @@ class TinyChainBlock {
    * @type {TinyCryptoParser}
    */
   #parser;
+
+  /**
+   * The signer instance used for cryptographic operations.
+   * @type {TinySecp256k1}
+   */
+  #signer;
 
   #payloadString = false;
   #stopRequested = false;
@@ -132,9 +168,16 @@ class TinyChainBlock {
         throw new Error(`Data entry at index ${index} must be a non-null object.`);
 
       if (!('address' in t)) throw new Error(`Missing "address" in data entry at index ${index}.`);
+      if (!('addressType' in t))
+        throw new Error(`Missing "addressType" in data entry at index ${index}.`);
 
       if (typeof t.address !== 'string' || !t.address.trim())
         throw new Error(`"address" in data entry at index ${index} must be a non-empty string.`);
+
+      if (typeof t.addressType !== 'string' || !t.addressType.trim())
+        throw new Error(
+          `"addressType" in data entry at index ${index} must be a non-empty string.`,
+        );
 
       if (!('payload' in t)) throw new Error(`Missing "payload" in data entry at index ${index}.`);
 
@@ -173,6 +216,7 @@ class TinyChainBlock {
       return {
         transfers: this.#transferValidator(t.transfers),
         address: t.address,
+        addressType: t.addressType,
         payload: this.#payloadString ? t.payload : undefined,
         gasLimit,
         gasUsed,
@@ -194,7 +238,7 @@ class TinyChainBlock {
   #validateTxIndexObject(txIndexObject) {
     if (txIndexObject === undefined) return {};
     if (typeof txIndexObject !== 'object' || txIndexObject === null || Array.isArray(txIndexObject))
-      throw new Error('Transaction index must be a plain object.');
+      throw new Error('Transaction tx must be a plain object.');
 
     /** @type {TxIndexMap} */
     const result = {};
@@ -207,32 +251,41 @@ class TinyChainBlock {
   }
 
   /**
+   * Validates and sanitizes a list of transaction signatures.
+   * Ensures the input is an array of non-empty strings.
+   *
+   * @param {SignIndexMap|undefined} signatureList
+   * @returns {SignIndexMap}
+   * @throws {Error} If the input is not a valid array of strings.
+   */
+  #validateSignatureList(signatureList) {
+    if (!Array.isArray(signatureList)) throw new Error('Transaction signatures must be an array.');
+    for (const [index, sig] of signatureList.entries()) {
+      if (typeof sig !== 'string' || sig.trim() === '')
+        throw new Error(`Invalid signature at index ${index}: must be a non-empty string.`);
+      if (!this.data || !(index in this.data))
+        throw new Error(`Invalid signature index ${index}: no corresponding entry in "this.data".`);
+    }
+    return signatureList;
+  }
+
+  /**
    * Creates a new instance of a block with all necessary data and gas configuration.
    *
-   * @param {Object} [options={}] - Configuration object.
-   * @param {boolean} [options.payloadString=true] - If true, payload must be a string.
-   * @param {TinyCryptoParser} [options.parser] - Parser instance used for deep serialization.
-   * @param {bigint | number | string} [options.index=0n] - Block index.
-   * @param {string} [options.previousHash=''] - Hash of the previous block.
-   * @param {bigint | number | string} [options.difficulty=1n] - Mining difficulty.
-   * @param {bigint | number | string} [options.reward=0n] - Block reward.
-   * @param {bigint | number | string} [options.nonce=0n] - Starting nonce.
-   * @param {bigint | number | string} [options.chainId] - The chain ID.
-   * @param {TxIndexMap} [options.txs] - A map where each key is a transaction index.
-   * @param {number} [options.timestamp=Date.now()] - Unix timestamp of the block.
-   * @param {string|null} [options.hash=null] - Optional precomputed hash.
-   * @param {string|null} [options.miner=null] - Address of the miner.
-   * @param {NewTransactionData[]} [options.data=[]] - Block data.
+   * @param {BlockInitData} [options={}] - Configuration object.
    */
   constructor({
+    firstValidation = true,
     payloadString = true,
+    signer = new TinySecp256k1(),
     parser = new TinyCryptoParser(),
     timestamp = Date.now(),
     chainId,
     txs,
+    sigs,
     data,
     index = 0n,
-    previousHash = '',
+    prevHash = '',
     difficulty = 1n,
     reward = 0n,
     nonce = 0n,
@@ -251,8 +304,8 @@ class TinyChainBlock {
     if (typeof index !== 'bigint' && !(typeof index === 'string' && /^[0-9]+$/.test(index)))
       throw new Error('index must be a bigint or a numeric string.');
     this.index = typeof index === 'bigint' ? index : BigInt(index);
-    if (typeof previousHash !== 'string') throw new Error('previousHash must be a hash string.');
-    this.previousHash = previousHash;
+    if (typeof prevHash !== 'string') throw new Error('prevHash must be a hash string.');
+    this.prevHash = prevHash;
     if (
       typeof difficulty !== 'bigint' &&
       !(typeof difficulty === 'string' && /^[0-9]+$/.test(difficulty))
@@ -274,13 +327,48 @@ class TinyChainBlock {
       throw new Error('chainId must be a bigint or a numeric string.');
     this.chainId = typeof chainId === 'bigint' ? chainId : BigInt(chainId);
 
+    if (typeof signer !== 'object')
+      throw new Error('Invalid type for signer. Expected a TinySecp256k1.');
+    this.#signer = signer;
+
     this.data = this.#dataValidator(data);
     if (this.data.length === 0) throw new Error('The block data cannot be empty.');
-    this.txs = this.#validateTxIndexObject(txs);
 
     if (typeof hash !== 'string' && hash !== null)
       throw new Error('hash must be a hash string or null.');
     this.hash = typeof hash !== 'string' ? this.calculateHash() : hash;
+
+    this.txs = this.#validateTxIndexObject(txs);
+    this.sigs = this.#validateSignatureList(sigs);
+
+    if (firstValidation) this.validateBlockContent();
+  }
+
+  /**
+   * Validates the integrity of each transaction inside the block by verifying
+   * its ECDSA signature using the associated address.
+   *
+   * It loops through all transactions, serializes the corresponding data,
+   * and ensures that the signature is valid. If any signature is invalid,
+   * it throws an error identifying the problematic transaction and its index.
+   *
+   * @throws {Error} If any transaction has an invalid ECDSA signature or if the
+   * number of validated transactions does not match the expected count.
+   */
+  validateBlockContent() {
+    for (const index in this.data) {
+      const data = this.data[index];
+      const sig = this.sigs[index];
+      if (
+        !this.#signer.verifyECDSA(
+          this.#parser.serializeDeep(data),
+          Buffer.from(sig, 'hex'),
+          data.address,
+          'utf-8',
+        )
+      )
+        throw new Error(`Invalid block signature in the index "${index}".`);
+    }
   }
 
   /**
@@ -303,13 +391,14 @@ class TinyChainBlock {
       index: this.index,
       timestamp: this.timestamp,
       data: this.data,
-      previousHash: this.previousHash,
+      prevHash: this.prevHash,
       difficulty: this.difficulty,
       nonce: this.nonce,
       hash: this.hash,
       reward: this.reward,
       miner: this.miner,
       txs: this.txs,
+      sigs: this.sigs,
     };
   }
 
@@ -329,8 +418,9 @@ class TinyChainBlock {
   calculateHash() {
     let value = '';
     value += String(this.timestamp);
-    value += this.previousHash;
+    value += this.prevHash;
     value += this.#parser.serializeDeep(this.data);
+    value += this.#parser.serialize(this.sigs);
     value += this.index.toString();
     value += this.nonce.toString();
     value += this.chainId.toString();
@@ -359,11 +449,11 @@ class TinyChainBlock {
   /**
    * Mines the block until a valid hash is found.
    * @param {string|null} minerAddress - Address of the miner.
-   * @param {{ previousHash?: string, index?: bigint, onComplete?: function, onProgress?: function }} [options={}]
+   * @param {{ prevHash?: string, index?: bigint, onComplete?: function, onProgress?: function }} [options={}]
    * @returns {Promise<{ nonce: bigint, hash: string, success: boolean }>}
    * @throws {Error} If the address is invalid.
    */
-  async mine(minerAddress = null, { previousHash = '0', index = 0n, onComplete, onProgress } = {}) {
+  async mine(minerAddress = null, { prevHash = '0', index = 0n, onComplete, onProgress } = {}) {
     if (typeof minerAddress !== 'string')
       throw new Error(`Invalid address: expected a string, got "${typeof minerAddress}"`);
 
@@ -375,7 +465,7 @@ class TinyChainBlock {
     const startTime = Date.now();
 
     this.index = index;
-    this.previousHash = previousHash;
+    this.prevHash = prevHash;
     this.timestamp = startTime;
 
     const mineStep = async () => {
@@ -475,8 +565,8 @@ class TinyChainBlock {
    * Returns the hash of the previous block.
    * @returns {string|null}
    */
-  getPreviousHash() {
-    return this.previousHash;
+  getPrevHash() {
+    return this.prevHash;
   }
 
   /**

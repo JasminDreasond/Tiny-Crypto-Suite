@@ -44,6 +44,7 @@ class TinySecp256k1 {
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
   msgPrefix = 'Tinychain Signed Message:\n';
   prefix = '';
+  type = '';
 
   /**
    * Computes SHA-256 hash of the input buffer.
@@ -79,20 +80,110 @@ class TinySecp256k1 {
    * Creates an instance of TinySecp256k1.
    *
    * @param {Object} [options] - Optional parameters for the instance.
+   * @param {string|null} [options.type=null] - Crypto type used during the get address.
    * @param {string|null} [options.prefix=null] - Crypto prefix used during message verification.
    * @param {string|null} [options.msgPrefix=null] - Message prefix used during message signing.
    * @param {string|null} [options.privateKey=null] - String representation of the private key.
    * @param {BufferEncoding} [options.privateKeyEncoding='hex'] - Encoding used for the privateKey string.
    */
   constructor({
+    type = null,
     prefix = null,
     msgPrefix = null,
     privateKey = null,
     privateKeyEncoding = 'hex',
   } = {}) {
+    if (type !== null && typeof type !== 'string') throw new Error('type must be a string or null');
+    if (prefix !== null && typeof prefix !== 'string')
+      throw new Error('prefix must be a string or null');
+    if (msgPrefix !== null && typeof msgPrefix !== 'string')
+      throw new Error('msgPrefix must be a string or null');
+    if (privateKey !== null && typeof privateKey !== 'string')
+      throw new Error('privateKey must be a string or null');
+
     if (typeof msgPrefix === 'string') this.msgPrefix = msgPrefix;
     if (typeof prefix === 'string') this.prefix = prefix;
+    if (typeof type === 'string') this.type = type;
     this.privateKey = privateKey ? Buffer.from(privateKey, privateKeyEncoding) : randomBytes(32);
+  }
+
+  /** @type {Record<string, string>} */
+  types = {};
+  /** @type {Record<string, string>} */
+  prefixes = {};
+
+  /**
+   * Checks if the given type exists in the supported types list.
+   *
+   * @param {string} type
+   * @returns {boolean}
+   * @throws {Error} If type is not a string.
+   */
+  isType(type) {
+    if (this.types[type]) return true;
+    return false;
+  }
+
+  /**
+   * Checks if the given prefix exists in the supported prefixes list.
+   *
+   * @param {string} type
+   * @returns {boolean}
+   * @throws {Error} If type is not a string.
+   */
+  isPrefix(type) {
+    if (this.prefixes[type]) return true;
+    return false;
+  }
+
+  /**
+   * Returns the matching prefix type from the supported list if found.
+   *
+   * @param {string} address
+   * @returns {string|null}
+   * @throws {TypeError} If address is not a string.
+   */
+  getPrefixType(address) {
+    if (typeof address !== 'string') throw new TypeError('Expected address to be a string.');
+    for (const type in this.types) {
+      const prefix = this.types[type];
+      if (address.startsWith(prefix)) return type;
+    }
+    return null;
+  }
+
+  /**
+   * Returns the message prefix if it's a string.
+   *
+   * @returns {string}
+   * @throws {Error} If msgPrefix is not a string.
+   */
+  getMsgPrefix() {
+    if (typeof this.msgPrefix !== 'string')
+      throw new Error('[getMsgPrefix] msgPrefix must be a string.');
+    return this.msgPrefix;
+  }
+
+  /**
+   * Returns the address prefix if it's a string.
+   *
+   * @returns {string}
+   * @throws {Error} If prefix is not a string.
+   */
+  getPrefix() {
+    if (typeof this.prefix !== 'string') throw new Error('[getPrefix] prefix must be a string.');
+    return this.prefix;
+  }
+
+  /**
+   * Returns the crypto type if it's a string.
+   *
+   * @returns {string}
+   * @throws {Error} If type is not a string.
+   */
+  getType() {
+    if (typeof this.type !== 'string') throw new Error('[getType] type must be a string.');
+    return this.type;
   }
 
   /**
@@ -188,6 +279,15 @@ class TinySecp256k1 {
   }
 
   /**
+   * Returns the public key as a buffer.
+   * @param {boolean} [compressed=true] - Whether to return the compressed version of the key.
+   * @returns {Buffer}
+   */
+  getPublicKeyBuffer(compressed = true) {
+    return Buffer.from(this.getKeyPair().getPublic(compressed, 'array'));
+  }
+
+  /**
    * Returns the public key in hexadecimal format.
    *
    * @param {boolean} [compressed=true] - Whether to return the compressed version of the key.
@@ -198,14 +298,35 @@ class TinySecp256k1 {
   }
 
   /**
+   * Returns the public key in vanilla format.
+   *
+   * @param {boolean} [compressed=true] - Whether to return the compressed version of the key.
+   * @returns {Buffer} Hash160 representation of the public key.
+   */
+  getPubVanillaAddress(compressed = true) {
+    return TinySecp256k1.hash160(this.getPublicKeyBuffer(compressed));
+  }
+
+  /**
+   * Returns the address in hash160 format.
+   *
+   * @param {string} address - Whether to return the compressed version of the key.
+   * @param {string} [type=this.getType()] - The type of address to generate.
+   * @returns {Buffer} Hash160 representation of the public key.
+   */
+  addressToVanilla(address, type = this.getType()) {
+    return TinySecp256k1.hash160(Buffer.from(address, 'hex'));
+  }
+
+  /**
    * Returns the public address derived from the public key.
    *
-   * @param {string} [type] - The type of address to generate.
-   * @param {boolean} [compressed=true] - Whether to use the compressed version of the public key.
+   * @param {string} [type=this.getType()] - The type of address to generate.
+   * @param {Buffer} [pubKey=this.getPublicKeyBuffer()] - The pubKey buffer.
    * @returns {string} The public address.
    */
-  getAddress(type = '', compressed = true) {
-    return `${this.prefix}${this.getPublicKeyHex(compressed)}`;
+  getAddress(pubKey = this.getPublicKeyBuffer(), type = this.getType()) {
+    return `${this.getPrefix()}${pubKey.toString('hex')}`;
   }
 
   /**
@@ -277,12 +398,12 @@ class TinySecp256k1 {
    * @param {Buffer} signature - A 65-byte compact signature buffer (r + s + v).
    * @param {Object} [options] - Options for decoding the message hash.
    * @param {BufferEncoding} [options.encoding='hex'] - The encoding of the input message.
-   * @param {string} [options.prefix=this.msgPrefix] - Optional prefix used before hashing the message.
+   * @param {string} [options.prefix=this.getMsgPrefix()] - Optional prefix used before hashing the message.
    * @returns {string|null} The recovered compressed public key in hex format, or null if recovery fails.
    * @throws {Error} If the encoding type is unsupported or signature is invalid.
    */
   recoverMessage(message, signature, options = {}) {
-    const { encoding = 'hex', prefix = this.msgPrefix } = options;
+    const { encoding = 'hex', prefix = this.getMsgPrefix() } = options;
     const ec = this.getEc();
     const hash = this.#getMessageHash(message, encoding, prefix);
 
@@ -297,13 +418,13 @@ class TinySecp256k1 {
    * @param {string|Buffer} message - The message to sign.
    * @param {Object} [options] - Options for the message hashing process.
    * @param {BufferEncoding} [options.encoding='hex'] - The encoding used for string messages.
-   * @param {string} [options.prefix=this.msgPrefix] - Optional message prefix for the hash.
+   * @param {string} [options.prefix=this.getMsgPrefix()] - Optional message prefix for the hash.
    * @returns {Buffer} A 65-byte recoverable signature (r + s + v).
    * @throws {Error} If recovery param is missing or encoding type is unsupported.
    */
   signMessage(message, options = {}) {
     const keyPair = this.getKeyPair();
-    const { encoding = 'hex', prefix = this.msgPrefix } = options;
+    const { encoding = 'hex', prefix = this.getMsgPrefix() } = options;
     const hash = this.#getMessageHash(message, encoding, prefix);
 
     const { r, s, recoveryParam } = keyPair.sign(hash, { canonical: true });
