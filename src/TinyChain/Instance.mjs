@@ -585,7 +585,6 @@ class TinyChainInstance {
       payload: 'Genesis Block',
       gasLimit: 0n,
       gasUsed: 0n,
-      baseFeePerGas: 0n,
       maxFeePerGas: 0n,
       maxPriorityFeePerGas: 0n,
     };
@@ -595,6 +594,7 @@ class TinyChainInstance {
     const block = this.#createBlockInstance({
       index: 0n,
       prevHash: '0',
+      baseFeePerGas: 0n,
       firstValidation: false,
       data: [data],
       sigs: [sig.toString('hex')],
@@ -636,6 +636,7 @@ class TinyChainInstance {
    */
   #createBlockInstance(options) {
     return new TinyChainBlock({
+      baseFeePerGas: this.isCurrencyMode() ? this.getBaseFeePerGas() : 0n,
       payloadString: this.#payloadString,
       parser: this.#parser,
       signer: this.#signer,
@@ -889,7 +890,6 @@ class TinyChainInstance {
       payload,
       gasLimit: isCurrencyMode ? gasLimit : 0n,
       gasUsed,
-      baseFeePerGas: isCurrencyMode ? this.getBaseFeePerGas() : 0n,
       maxFeePerGas: isCurrencyMode ? maxFeePerGas : 0n,
       maxPriorityFeePerGas: isCurrencyMode ? maxPriorityFeePerGas : 0n,
     };
@@ -939,7 +939,6 @@ class TinyChainInstance {
       if (!Buffer.isBuffer(sig) && typeof sig !== 'string')
         throw new Error(`Signature at index ${index} must be a Buffer or hex string`);
 
-      data.baseFeePerGas = isCurrencyMode ? this.getBaseFeePerGas() : 0n;
       dataList.push(data);
       sigs.push(typeof sig === 'string' ? sig : sig.toString('hex'));
     }
@@ -1130,12 +1129,15 @@ class TinyChainInstance {
   updateBalance(block, balances = this.#getBalances(), emitEvents = true) {
     const reward = block.reward;
     const minerAddress = block.miner;
+    const baseFeePerGas = block.baseFeePerGas;
     const isMinerAddress = typeof minerAddress === 'string' && minerAddress.length > 0;
 
     if (isMinerAddress && !this.#signer.validateAddress(minerAddress, 'guess').valid)
       throw new Error('Invalid miner address!');
     if (typeof reward !== 'bigint')
       throw new Error(`Invalid reward: expected a BigInt, got "${typeof reward}"`);
+    if (typeof baseFeePerGas !== 'bigint')
+      throw new Error(`Invalid baseFeePerGas: expected a BigInt, got "${typeof baseFeePerGas}"`);
     if (typeof minerAddress !== 'string' && minerAddress !== null)
       throw new Error(
         `Invalid minerAddress: expected a string or null, got "${typeof minerAddress}"`,
@@ -1166,7 +1168,6 @@ class TinyChainInstance {
               `Gas limit exceeded: used ${data.gasUsed} > limit ${data.gasLimit} for sender "${execAddress}"`,
             );
 
-          const baseFeePerGas = data.baseFeePerGas;
           const maxPriorityFeePerGas = data.maxPriorityFeePerGas;
           const maxFeePerGas = data.maxFeePerGas; // user sets this
 

@@ -21,7 +21,6 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  * @typedef {Object} NewTransactionData
  * @property {bigint | number | string} gasLimit - Max gas allowed for transactions.
  * @property {bigint | number | string} gasUsed - Actual gas used.
- * @property {bigint | number | string} baseFeePerGas - Base fee per gas unit.
  * @property {bigint | number | string} maxPriorityFeePerGas - Priority fee paid to the miner.
  * @property {bigint | number | string} maxFeePerGas - Max total fee per gas unit allowed.
  * @property {string} address - Hex address that created the tx.
@@ -34,7 +33,6 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  * @typedef {Object} TransactionData
  * @property {bigint} gasLimit - Max gas allowed for transactions.
  * @property {bigint} gasUsed - Actual gas used.
- * @property {bigint} baseFeePerGas - Base fee per gas unit.
  * @property {bigint} maxPriorityFeePerGas - Priority fee paid to the miner.
  * @property {bigint} maxFeePerGas - Max total fee per gas unit allowed.
  * @property {string} address - Hex address that created the block.
@@ -57,6 +55,7 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  * @property {bigint | number | string} [reward=0n] - Block reward.
  * @property {bigint | number | string} [nonce=0n] - Starting nonce.
  * @property {bigint | number | string} [chainId] - The chain ID.
+ * @property {bigint | number | string} [baseFeePerGas] - Base fee per gas unit.
  * @property {TxIndexMap} [txs] - A map where each key is a transaction index.
  * @property {SignIndexMap} [sigs] - A map where each key is a transaction signature.
  * @property {number} [time=Date.now()] - Unix timestamp of the block.
@@ -76,6 +75,7 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  *   reward: bigint,
  *   miner: string|null,
  *   chainId: bigint,
+ *   baseFeePerGas: bigint,
  *   txs: TxIndexMap,
  *   sigs: SignIndexMap,
  * }} GetTransactionData
@@ -184,13 +184,7 @@ class TinyChainBlock {
         throw new Error(`"payload" in data entry at index ${index} must be a string.`);
 
       /** @type {Array<string>} */
-      const bigintFields = [
-        'gasLimit',
-        'gasUsed',
-        'baseFeePerGas',
-        'maxFeePerGas',
-        'maxPriorityFeePerGas',
-      ];
+      const bigintFields = ['gasLimit', 'gasUsed', 'maxFeePerGas', 'maxPriorityFeePerGas'];
 
       for (const field of bigintFields) {
         // @ts-ignore
@@ -203,8 +197,6 @@ class TinyChainBlock {
 
       const gasLimit = typeof t.gasLimit === 'bigint' ? t.gasLimit : BigInt(t.gasLimit);
       const gasUsed = typeof t.gasUsed === 'bigint' ? t.gasUsed : BigInt(t.gasUsed);
-      const baseFeePerGas =
-        typeof t.baseFeePerGas === 'bigint' ? t.baseFeePerGas : BigInt(t.baseFeePerGas);
       const maxFeePerGas =
         typeof t.maxFeePerGas === 'bigint' ? t.maxFeePerGas : BigInt(t.maxFeePerGas);
       const maxPriorityFeePerGas =
@@ -219,7 +211,6 @@ class TinyChainBlock {
         payload: this.#payloadString ? t.payload : undefined,
         gasLimit,
         gasUsed,
-        baseFeePerGas,
         maxFeePerGas,
         maxPriorityFeePerGas,
       };
@@ -286,6 +277,7 @@ class TinyChainBlock {
     index = 0n,
     prevHash = '',
     diff = 1n,
+    baseFeePerGas = 0n,
     reward = 0n,
     nonce = 0n,
     hash = null,
@@ -307,6 +299,12 @@ class TinyChainBlock {
     if (typeof index !== 'bigint' && !(typeof index === 'string' && /^[0-9]+$/.test(index)))
       throw new Error('index must be a bigint or a numeric string.');
     this.index = typeof index === 'bigint' ? index : BigInt(index);
+    if (
+      typeof baseFeePerGas !== 'bigint' &&
+      !(typeof baseFeePerGas === 'string' && /^[0-9]+$/.test(baseFeePerGas))
+    )
+      throw new Error('baseFeePerGas must be a bigint or a numeric string.');
+    this.baseFeePerGas = typeof baseFeePerGas === 'bigint' ? baseFeePerGas : BigInt(baseFeePerGas);
     if (typeof prevHash !== 'string') throw new Error('prevHash must be a hash string.');
     this.prevHash = prevHash;
     if (typeof diff !== 'bigint' && !(typeof diff === 'string' && /^[0-9]+$/.test(diff)))
@@ -393,6 +391,7 @@ class TinyChainBlock {
       index: this.getIndex(),
       time: this.getTime(),
       data: this.getData(),
+      baseFeePerGas: this.getBaseFeePerGas(),
       prevHash: this.getPrevHash(),
       diff: this.getDiff(),
       nonce: this.getNonce(),
@@ -424,6 +423,7 @@ class TinyChainBlock {
     value += this.#parser.serializeDeep(this.data);
     value += this.#parser.serialize(this.sigs);
     value += this.getIndex().toString();
+    value += this.getBaseFeePerGas().toString();
     value += this.getNonce().toString();
     value += this.getChainId().toString();
     return createHash('sha256').update(Buffer.from(value, 'utf-8')).digest('hex');
@@ -663,6 +663,15 @@ class TinyChainBlock {
   getHash() {
     if (typeof this.hash !== 'string') throw new Error('Hash must be a string');
     return this.hash;
+  }
+
+  /**
+   * Returns the base fee per gas (in gwei).
+   * @returns {bigint}
+   */
+  getBaseFeePerGas() {
+    if (typeof this.baseFeePerGas !== 'bigint') throw new Error('baseFeePerGas must be a bigint');
+    return this.baseFeePerGas;
   }
 }
 
