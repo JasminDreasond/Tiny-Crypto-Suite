@@ -185,7 +185,7 @@ class TinyChainInstance {
    * @returns {boolean} `true` if a valid genesis block is present, otherwise `false`.
    */
   hasGenesisBlock() {
-    if (this.chain.length === 0) return false;
+    if (this.#getChain().length === 0) return false;
     const firstBlock = this.getFirstBlock();
     return (
       firstBlock.index === 0n &&
@@ -208,6 +208,32 @@ class TinyChainInstance {
    * @type {Balances}
    */
   initialBalances = {};
+
+  /**
+   * Validates and returns the internal balances object.
+   * Throws an error if balances is not a plain object.
+   *
+   * @returns {Balances} A reference to the balances object if valid.
+   * @throws {Error} If balances is not a plain object.
+   */
+  #getBalances() {
+    if (typeof this.balances !== 'object' || this.balances === null || Array.isArray(this.balances))
+      throw new Error('balances must be a plain object');
+    return this.balances;
+  }
+
+  /**
+   * Safely retrieves the current blockchain array.
+   * Ensures that `this.chain` is a valid array before returning it.
+   * If the internal `chain` property is corrupted or invalid, an error is thrown to prevent further logic failures.
+   *
+   * @returns {TinyChainBlock[]} The current blockchain as an array of TinyChainBlock instances.
+   * @throws {Error} If `this.chain` is not an array.
+   */
+  #getChain() {
+    if (!Array.isArray(this.chain)) throw new Error('chain must be an array');
+    return this.chain;
+  }
 
   /**
    * Constructs a new blockchain instance with optional configuration parameters.
@@ -478,8 +504,8 @@ class TinyChainInstance {
    *
    */
   #init(signer = this.#signer) {
-    if (this.chain.length > 0)
-      throw new Error('Blockchain already initialized with a genesis block');
+    const chain = this.#getChain();
+    if (chain.length > 0) throw new Error('Blockchain already initialized with a genesis block');
 
     const data = {
       transfers: [],
@@ -502,7 +528,7 @@ class TinyChainInstance {
       data: [data],
       sigs: [sig.toString('hex')],
     });
-    this.chain.push(block);
+    chain.push(block);
     return block;
   }
 
@@ -622,11 +648,12 @@ class TinyChainInstance {
    * @returns {boolean|null} Returns `true` if the chain is valid, `false` or `null` otherwise.
    */
   isValid(startIndex = 0, endIndex = null) {
-    const end = endIndex ?? this.chain.length - 1;
+    const chain = this.#getChain();
+    const end = endIndex ?? chain.length - 1;
 
     for (let i = Math.max(startIndex, 1); i <= end; i++) {
-      const current = this.chain[i];
-      const previous = this.chain[i - 1];
+      const current = chain[i];
+      const previous = chain[i - 1];
       const result = this.#isValidBlock(current, previous);
       if (!result) return result;
     }
@@ -768,7 +795,7 @@ class TinyChainInstance {
         if (!isValid) throw new Error('Block mining invalid');
 
         if (this.isCurrencyMode() || this.isPayloadMode()) this.updateBalance(newBlock);
-        this.chain.push(newBlock);
+        this.#getChain().push(newBlock);
         this.#emit(TinyChainEvents.NewBlock, newBlock);
         return newBlock;
       };
@@ -798,7 +825,7 @@ class TinyChainInstance {
       if (!isValid) throw new Error('Invalid block cannot be added to the chain.');
 
       if (this.isCurrencyMode() || this.isPayloadMode()) this.updateBalance(minedBlock);
-      this.chain.push(minedBlock);
+      this.#getChain().push(minedBlock);
       this.#emit(TinyChainEvents.NewBlock, minedBlock);
       return minedBlock;
     });
@@ -823,7 +850,7 @@ class TinyChainInstance {
    * @returns {TinyChainBlock} The latest block in the blockchain.
    */
   getLatestBlock() {
-    return this.getChainBlock(this.chain.length - 1);
+    return this.getChainBlock(this.#getChain().length - 1);
   }
 
   /**
@@ -841,9 +868,10 @@ class TinyChainInstance {
     this.balances = {};
     this.#emit(TinyChainEvents.BalancesInitialized, this.balances);
     if (this.isCurrencyMode()) {
+      const balances = this.#getBalances();
       for (const [address, balance] of Object.entries(this.getInitialBalances())) {
-        this.balances[address] = BigInt(balance);
-        this.#emit(TinyChainEvents.BalanceStarted, address, this.balances[address]);
+        balances[address] = BigInt(balance);
+        this.#emit(TinyChainEvents.BalanceStarted, address, balances[address]);
       }
     }
   }
@@ -860,7 +888,7 @@ class TinyChainInstance {
    * @throws {Error} If the list is not an array, if any transfer is malformed,
    * or if the sender is unauthorized or lacks balance.
    */
-  validateTransfers(pubKey, addressType, transfers, balances = this.balances) {
+  validateTransfers(pubKey, addressType, transfers, balances = this.#getBalances()) {
     const isAdmin = this.getAdmins().has(pubKey);
     const address = this.#signer.getAddress(Buffer.from(pubKey, 'hex'), addressType);
 
@@ -911,7 +939,7 @@ class TinyChainInstance {
    *
    * @returns {void} This method does not return any value.
    */
-  updateBalance(block, balances = this.balances, emitEvents = true) {
+  updateBalance(block, balances = this.#getBalances(), emitEvents = true) {
     const reward = block.reward;
     const minerAddress = block.miner;
     const isMinerAddress = typeof minerAddress === 'string' && minerAddress.length > 0;
@@ -1039,7 +1067,7 @@ class TinyChainInstance {
     if (!this.isCurrencyMode()) throw new Error('Currency mode must be enabled.');
     /** @type {Balances} */
     const result = {};
-    for (const [addr, amount] of Object.entries(this.balances)) result[addr] = amount;
+    for (const [addr, amount] of Object.entries(this.#getBalances())) result[addr] = amount;
     return result;
   }
 
@@ -1059,10 +1087,11 @@ class TinyChainInstance {
    * @throws {Error} Throws if `currencyMode` is disabled or if the index is invalid.
    */
   getBalancesAt(startIndex = 0, endIndex = null) {
+    const chainList = this.#getChain();
     if (!this.isCurrencyMode() && !this.isPayloadMode())
       throw new Error('Currency mode or payload mode must be enabled.');
-    const end = endIndex !== null ? endIndex : this.chain.length - 1;
-    if (startIndex < 0 || end >= this.chain.length || startIndex > end)
+    const end = endIndex !== null ? endIndex : chainList.length - 1;
+    if (startIndex < 0 || end >= chainList.length || startIndex > end)
       throw new Error('Invalid startIndex or endIndex range.');
 
     /** @type {Balances} */
@@ -1070,7 +1099,7 @@ class TinyChainInstance {
     for (const [address, balance] of Object.entries(this.getInitialBalances()))
       balances[address] = BigInt(balance);
 
-    const chain = this.chain.slice(startIndex, end + 1);
+    const chain = chainList.slice(startIndex, end + 1);
     for (const block of chain) this.updateBalance(block, balances, false);
 
     return balances;
@@ -1101,7 +1130,8 @@ class TinyChainInstance {
    */
   getBalance(address) {
     if (!this.isCurrencyMode()) throw new Error('Currency mode must be enabled.');
-    if (typeof this.balances[address] === 'bigint') return this.balances[address];
+    const balances = this.#getBalances();
+    if (typeof balances[address] === 'bigint') return balances[address];
     return 0n;
   }
 
@@ -1119,8 +1149,8 @@ class TinyChainInstance {
   recalculateBalances() {
     this.startBalances();
     if (this.isCurrencyMode() || this.isPayloadMode())
-      for (const block of this.chain) this.updateBalance(block);
-    this.#emit(TinyChainEvents.BalanceRecalculated, this.balances);
+      for (const block of this.#getChain()) this.updateBalance(block);
+    this.#emit(TinyChainEvents.BalanceRecalculated, this.#getBalances());
   }
 
   /**
@@ -1141,8 +1171,9 @@ class TinyChainInstance {
    * @throws {Error} If the block at the given index does not exist.
    */
   getChainBlock(index) {
-    if (!this.chain[index]) throw new Error(`The chain data ${index} don't exist!`);
-    return this.chain[index];
+    const chain = this.#getChain();
+    if (!chain[index]) throw new Error(`The chain data ${index} don't exist!`);
+    return chain[index];
   }
 
   /**
@@ -1164,7 +1195,7 @@ class TinyChainInstance {
    * @returns {GetTransactionData[]} An array containing all blocks' data.
    */
   getAllChainData() {
-    return this.chain.map((block) => block.get());
+    return this.#getChain().map((block) => block.get());
   }
 
   /**
@@ -1195,11 +1226,12 @@ class TinyChainInstance {
    * @throws {Error} If indices are out of bounds or invalid.
    */
   exportChain(startIndex = 0, endIndex = null) {
-    const end = endIndex !== null ? endIndex : this.chain.length - 1;
-    if (startIndex < 0 || end >= this.chain.length || startIndex > end)
+    const chain = this.#getChain();
+    const end = endIndex !== null ? endIndex : chain.length - 1;
+    if (startIndex < 0 || end >= chain.length || startIndex > end)
       throw new Error('Invalid startIndex or endIndex range.');
 
-    return this.chain.slice(startIndex, end + 1).map((b) => b.export());
+    return chain.slice(startIndex, end + 1).map((b) => b.export());
   }
 
   /**
@@ -1223,7 +1255,7 @@ class TinyChainInstance {
     const isValid = this.isValid();
     if (isValid === null) throw new Error('The data chain is null or corrupted.');
     if (!isValid) throw new Error('The data chain is invalid or corrupted.');
-    this.#emit(TinyChainEvents.ImportChain, this.chain);
+    this.#emit(TinyChainEvents.ImportChain, this.#getChain());
   }
 
   /**
