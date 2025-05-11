@@ -918,7 +918,8 @@ class TinyChainInstance {
     if (!Array.isArray(content) || content.length === 0)
       throw new Error('Content must be a non-empty array of BlockContent');
 
-    const reward = this.isCurrencyMode() ? this.getCurrentReward() : 0n;
+    const isCurrencyMode = this.isCurrencyMode();
+    const reward = isCurrencyMode ? this.getCurrentReward() : 0n;
     const dataList = [];
     const sigs = [];
     for (const [index, item] of content.entries()) {
@@ -930,16 +931,7 @@ class TinyChainInstance {
       )
         throw new Error(`Invalid BlockContent at index ${index}`);
       const { sig, data } = item;
-
-      const gasUsed = this.validateContent({
-        payload: data.payload,
-        transfers: data.transfers,
-        gasLimit: data.gasLimit,
-        maxFeePerGas: data.maxFeePerGas,
-        maxPriorityFeePerGas: data.maxPriorityFeePerGas,
-        address: data.address,
-        addressType: data.addressType,
-      });
+      const gasUsed = this.validateContent(data);
 
       if (gasUsed !== data.gasUsed)
         throw new Error(`Gas used at index ${index} value does not match`);
@@ -947,6 +939,7 @@ class TinyChainInstance {
       if (!Buffer.isBuffer(sig) && typeof sig !== 'string')
         throw new Error(`Signature at index ${index} must be a Buffer or hex string`);
 
+      data.baseFeePerGas = isCurrencyMode ? this.getBaseFeePerGas() : 0n;
       dataList.push(data);
       sigs.push(typeof sig === 'string' ? sig : sig.toString('hex'));
     }
