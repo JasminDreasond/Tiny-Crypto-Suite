@@ -43,6 +43,7 @@ const tinyWalletSimulation = async () => {
 
   const chain = new TinyChain.Instance(chainCfg);
   await chain.init();
+  const createBlock = (content) => chain.createBlock([chain.createBlockContent(content)]);
 
   console.log(bold('\n📊 ━━━ User Balances ━━━━━━━━━━━━'));
   for (const [user, balance] of Object.entries(chain.balances))
@@ -50,7 +51,7 @@ const tinyWalletSimulation = async () => {
 
   console.log(bold('\n🧱 ━━━ Transactions ━━━━━━━━━━━━━'));
 
-  const block1 = chain.createBlock({
+  const block1 = createBlock({
     signer: adminUser,
     payload: 'Admin enters here',
     transfers: [
@@ -64,7 +65,7 @@ const tinyWalletSimulation = async () => {
   await chain.mineBlock(miner.getAddress(), block1);
   console.log(green('✅ Admin forced 5000000n to Alice'));
 
-  const block2 = chain.createBlock({
+  const block2 = createBlock({
     signer: alice,
     payload: 'Alice builds',
     transfers: [
@@ -78,7 +79,7 @@ const tinyWalletSimulation = async () => {
   await chain.mineBlock(miner.getAddress(), block2);
   console.log(green('✅ Alice sent 2000000n to Bob'));
 
-  const block3 = chain.createBlock({
+  const block3 = createBlock({
     signer: charlie,
     payload: 'Bob pays fail',
     transfers: [
@@ -94,7 +95,7 @@ const tinyWalletSimulation = async () => {
     .mineBlock(miner.getAddress(), block3)
     .catch((err) => console.log(red("❌ As expected, Bob can't send from Charlie:"), err.message));
 
-  const block4 = chain.createBlock({
+  const block4 = createBlock({
     signer: bob,
     payload: 'Bob pays back',
     transfers: [
@@ -143,7 +144,7 @@ const tinyWalletSimulation = async () => {
   console.log(bold('\n🧮 ━━━ Reward Halving Test ━━━━━━━━'));
   const halvingBlocks = [];
   for (let i = 0; i < 20; i++) {
-    const block = chain.createBlock({ signer: alice });
+    const block = createBlock({ signer: alice });
     halvingBlocks.push(chain.mineBlock(miner.getAddress(), block));
   }
   await Promise.all(halvingBlocks);

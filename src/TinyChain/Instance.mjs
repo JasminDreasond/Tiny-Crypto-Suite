@@ -37,6 +37,15 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  */
 
 /**
+ * Represents the content payload to be inserted into a blockchain block.
+ * This object contains the transaction data and its corresponding cryptographic signature.
+ *
+ * @typedef {Object} BlockContent
+ * @property {TransactionData} data - The transaction data that describes the operation or transfer.
+ * @property {Buffer|string} sig - A cryptographic signature verifying the authenticity of the transaction.
+ */
+
+/**
  * Represents a complete blockchain instance, managing block creation, mining,
  * validation, and balance tracking in optional currency and payload modes.
  *
@@ -710,7 +719,7 @@ class TinyChainInstance {
   }
 
   /**
-   * Creates a new block for the blockchain with the provided transaction data and gas options.
+   * Creates a new block content for the blockchain with the provided transaction data and gas options.
    *
    * The method will validate the address, estimate the gas used for the transactions, and ensure that the gas
    * limit is not exceeded before creating the block. It also includes reward information if `currencyMode` is enabled.
@@ -721,13 +730,16 @@ class TinyChainInstance {
    * @param {Array<Transaction>} [options.transfers=[]] - The list of transfers (transactions) to be included in the block.
    * @param {GasConfig} [options.gasOptions={}] - Optional gas-related configuration.
    *
-   * @returns {TinyChainBlock} The newly created block instance with all the relevant data.
-   *
+   * @return {BlockContent}
    * @throws {Error} Throws an error if the `execAddress` is invalid or if the gas limit is exceeded.
    */
-  createBlock({ signer = this.#signer, payload = '', transfers = [], gasOptions = {} } = {}) {
+  createBlockContent({
+    signer = this.#signer,
+    payload = '',
+    transfers = [],
+    gasOptions = {},
+  } = {}) {
     const isCurrencyMode = this.isCurrencyMode();
-    const reward = isCurrencyMode ? this.getCurrentReward() : 0n;
     const {
       gasLimit = 50000n,
       maxFeePerGas = 200n,
@@ -755,12 +767,33 @@ class TinyChainInstance {
     };
 
     const sig = signer.signECDSA(this.#parser.serializeDeep(data), 'utf-8');
+    return { data, sig };
+  }
 
+  /**
+   * Creates a new blockchain block using the provided signed content payloads.
+   *
+   * This method aggregates multiple `BlockContent` entries—each containing transaction data and a corresponding signature—into a single block.
+   * It includes optional reward data when the chain is operating in `currencyMode`, and computes the current difficulty setting (`diff`) at creation time.
+   *
+   * The block is finalized by calling an internal method that handles structural assembly and final consistency.
+   *
+   * @param {BlockContent[]} content - An array of signed block content objects, each containing transaction data and its signature.
+   * @returns {TinyChainBlock} The newly created block instance with all aggregated data, ready to be appended to the chain.
+   */
+  createBlock(content) {
+    const reward = this.isCurrencyMode() ? this.getCurrentReward() : 0n;
+    const data = [];
+    const sigs = [];
+    for (const item of content) {
+      data.push(item.data);
+      sigs.push(typeof item.sig === 'string' ? item.sig : item.sig.toString('hex'));
+    }
     return this.#createBlockInstance({
-      data: [data],
-      sigs: [sig.toString('hex')],
-      diff: this.getDiff(),
+      data,
+      sigs,
       reward,
+      diff: this.getDiff(),
     });
   }
 
