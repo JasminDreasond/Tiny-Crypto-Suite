@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { TinyPromiseQueue } from 'tiny-essentials';
+import { formatBytes, TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
@@ -63,6 +63,9 @@ class TinyChainInstance {
   /** @typedef {import('./Block.mjs').BlockInitData} BlockInitData */
 
   #signer;
+  #blockSizeLimit;
+  #payloadSizeLimit;
+  #blockContentSizeLimit;
 
   /**
    * Important instance used to make event emitter.
@@ -268,6 +271,15 @@ class TinyChainInstance {
    * @param {Balances} [options.initialBalances={}] - Optional mapping of initial addresses to balances.
    * @param {string[]} [options.admins=[]] - List of admin public keys granted elevated permissions.
    *
+   * @param {number} [options.blockContentSizeLimit=-1] - Defines the maximum number of items allowed inside a single block's content.
+   * A value of -1 disables the limit entirely.
+   *
+   * @param {number} [options.blockSizeLimit=-1] - Defines the total maximum size (in bytes) for an entire block.
+   * A value of -1 disables the limit entirely.
+   *
+   * @param {number} [options.payloadSizeLimit=-1] - Sets the maximum allowed size (in bytes) for a transaction payload.
+   * A value of -1 disables the limit entirely.
+   *
    * @throws {Error} Throws an error if any parameter has an invalid type or value.
    */
   constructor({
@@ -284,6 +296,9 @@ class TinyChainInstance {
     halvingInterval = 100,
     lastBlockReward = 1000,
     initialBalances = {},
+    blockSizeLimit = -1,
+    blockContentSizeLimit = -1,
+    payloadSizeLimit = -1,
     admins = [],
   } = {}) {
     // Validation for each parameter
@@ -297,6 +312,29 @@ class TinyChainInstance {
       typeof transferGas !== 'string'
     )
       throw new Error('Invalid type for transferGas. Expected bigint, number, or string.');
+
+    if (
+      typeof blockContentSizeLimit !== 'number' ||
+      Number.isNaN(blockContentSizeLimit) ||
+      !Number.isFinite(blockContentSizeLimit) ||
+      blockContentSizeLimit < -1
+    )
+      throw new Error('Invalid type for blockContentSizeLimit. Expected number with min value -1.');
+    if (
+      typeof blockSizeLimit !== 'number' ||
+      Number.isNaN(blockSizeLimit) ||
+      !Number.isFinite(blockSizeLimit) ||
+      blockSizeLimit < -1
+    )
+      throw new Error('Invalid type for blockSizeLimit. Expected number with min value -1.');
+    if (
+      typeof payloadSizeLimit !== 'number' ||
+      Number.isNaN(payloadSizeLimit) ||
+      !Number.isFinite(payloadSizeLimit) ||
+      payloadSizeLimit < -1
+    )
+      throw new Error('Invalid type for payloadSizeLimit. Expected number with min value -1.');
+
     if (
       typeof baseFeePerGas !== 'bigint' &&
       typeof baseFeePerGas !== 'number' &&
@@ -349,6 +387,30 @@ class TinyChainInstance {
      * @type {TinySecp256k1}
      */
     this.#signer = signer;
+
+    /**
+     * Defines the maximum allowed size (in bytes) inside a single block's content.
+     * This is typically used to prevent overly large block contents.
+     *
+     * @type {number}
+     */
+    this.#blockContentSizeLimit = blockContentSizeLimit;
+
+    /**
+     * Sets the maximum allowed size (in bytes) for a transaction payload.
+     * Used to limit the data carried by each transaction to avoid abuse.
+     *
+     * @type {number}
+     */
+    this.#payloadSizeLimit = payloadSizeLimit;
+
+    /**
+     * Defines the total maximum size (in bytes) for an entire block.
+     * This includes headers, content, and metadata.
+     *
+     * @type {number}
+     */
+    this.#blockSizeLimit = blockSizeLimit;
 
     /**
      * Whether the payload should be stored as a string or not.
@@ -585,11 +647,16 @@ class TinyChainInstance {
   /**
    * Simulates gas estimation for an Ethereum-like transaction.
    * Considers base cost, data size, and per-transfer cost.
-   * @param {Transaction[]} transfers - List of transfers (e.g., token or balance movements).
+   * @param {Transaction[]|NewTransaction[]} transfers - List of transfers (e.g., token or balance movements).
    * @param {any} payload - Data to be included in the transaction (e.g., contract call).
    * @returns {bigint}
    */
   estimateGasUsed(transfers, payload) {
+    if (typeof payload !== 'undefined' && payload !== null && !Array.isArray(transfers))
+      throw new Error(`"transfers" in data entry must be a array.`);
+    if (this.#payloadString && typeof payload !== 'string')
+      throw new Error(`"payload" in data entry must be a string.`);
+
     const ZERO_BYTE_COST = 4n;
     const NONZERO_BYTE_COST = 16n;
 
@@ -719,6 +786,59 @@ class TinyChainInstance {
   }
 
   /**
+   * Validates the transaction content before inclusion in a block.
+   * This method checks payload format, transfer structure, gas-related constraints,
+   * and address validity. Throws detailed errors if any validation fails.
+   *
+   * @param {Object} [options={}] - Content data to be validated.
+   * @param {string} [options.payload] - Raw payload data in string format. Required.
+   * @param {Transaction[]|NewTransaction[]} [options.transfers] - List of transfers to be validated. Must be an array.
+   * @param {bigint} [options.gasLimit] - Maximum allowed gas usage for the transaction.
+   * @param {bigint} [options.maxFeePerGas] - The maximum total fee per unit of gas the sender is willing to pay.
+   * @param {bigint} [options.maxPriorityFeePerGas] - The tip paid to miners per unit of gas.
+   * @param {string} [options.address] - Sender address of the transaction.
+   * @param {string} [options.addressType] - Type of address (e.g., 'user', 'contract'). Must be a non-empty string.
+   *
+   * @throws {Error} If payload is not a string.
+   * @throws {Error} If transfers is not an array.
+   * @throws {Error} If any gas parameter is not a BigInt.
+   * @throws {Error} If address is not a string.
+   * @throws {Error} If addressType is invalid.
+   * @throws {Error} If gas used exceeds the provided gas limit.
+   *
+   * @returns {bigint} Returns the estimated gas used for the transaction.
+   */
+  validateContent({
+    payload,
+    transfers,
+    gasLimit,
+    maxFeePerGas,
+    maxPriorityFeePerGas,
+    address,
+    addressType,
+  } = {}) {
+    if (typeof payload !== 'string') throw new Error('Payload must be a string');
+    if (!Array.isArray(transfers)) throw new Error('Transfers must be an array');
+    const gasUsed = this.isCurrencyMode() ? this.estimateGasUsed(transfers, payload) : 0n;
+
+    if (
+      typeof gasLimit !== 'bigint' ||
+      typeof maxFeePerGas !== 'bigint' ||
+      typeof maxPriorityFeePerGas !== 'bigint'
+    )
+      throw new Error('Gas parameters must be BigInt');
+
+    if (typeof address !== 'string') throw new Error('Address value must be string');
+    if (typeof addressType !== 'string' || addressType.length === 0)
+      throw new Error('Invalid address type');
+
+    if (gasUsed > gasLimit)
+      throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
+    if (Array.isArray(transfers)) this.validateTransfers(address, addressType, transfers);
+    return gasUsed;
+  }
+
+  /**
    * Creates a new block content for the blockchain with the provided transaction data and gas options.
    *
    * The method will validate the address, estimate the gas used for the transactions, and ensure that the gas
@@ -739,12 +859,9 @@ class TinyChainInstance {
     transfers = [],
     gasOptions = {},
   } = {}) {
-    const isCurrencyMode = this.isCurrencyMode();
-
-    if (typeof payload !== 'string') throw new Error('Payload must be a string');
     if (!(signer instanceof TinySecp256k1))
       throw new Error('Invalid signer: expected TinySecp256k1-compatible object');
-    if (!Array.isArray(transfers)) throw new Error('Transfers must be an array');
+    const isCurrencyMode = this.isCurrencyMode();
 
     const {
       gasLimit = 50000n,
@@ -752,24 +869,18 @@ class TinyChainInstance {
       maxPriorityFeePerGas = this.getDefaultPriorityFee(),
     } = gasOptions;
 
-    if (
-      typeof gasLimit !== 'bigint' ||
-      typeof maxFeePerGas !== 'bigint' ||
-      typeof maxPriorityFeePerGas !== 'bigint'
-    )
-      throw new Error('Gas parameters must be BigInt');
-
     const address = signer.getPublicKeyHex();
     const addressType = signer.getType();
 
-    if (typeof address !== 'string') throw new Error('Address value must be string');
-    if (typeof addressType !== 'string' || addressType.length === 0)
-      throw new Error('Invalid address type');
-
-    const gasUsed = isCurrencyMode ? this.estimateGasUsed(transfers, payload) : 0n;
-    if (gasUsed > gasLimit)
-      throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
-    if (Array.isArray(transfers)) this.validateTransfers(address, addressType, transfers);
+    const gasUsed = this.validateContent({
+      payload,
+      transfers,
+      gasLimit,
+      maxFeePerGas,
+      maxPriorityFeePerGas,
+      address,
+      addressType,
+    });
 
     const data = {
       transfers,
@@ -808,10 +919,9 @@ class TinyChainInstance {
       throw new Error('Content must be a non-empty array of BlockContent');
 
     const reward = this.isCurrencyMode() ? this.getCurrentReward() : 0n;
-    const data = [];
+    const dataList = [];
     const sigs = [];
     for (const [index, item] of content.entries()) {
-      const sig = item.sig;
       if (
         typeof item !== 'object' ||
         item === null ||
@@ -819,14 +929,30 @@ class TinyChainInstance {
         item.data === null
       )
         throw new Error(`Invalid BlockContent at index ${index}`);
+      const { sig, data } = item;
+
+      const gasUsed = this.validateContent({
+        payload: data.payload,
+        transfers: data.transfers,
+        gasLimit: data.gasLimit,
+        maxFeePerGas: data.maxFeePerGas,
+        maxPriorityFeePerGas: data.maxPriorityFeePerGas,
+        address: data.address,
+        addressType: data.addressType,
+      });
+
+      if (gasUsed !== data.gasUsed)
+        throw new Error(`Gas used at index ${index} value does not match`);
+
       if (!Buffer.isBuffer(sig) && typeof sig !== 'string')
         throw new Error(`Signature at index ${index} must be a Buffer or hex string`);
 
-      data.push(item.data);
+      dataList.push(data);
       sigs.push(typeof sig === 'string' ? sig : sig.toString('hex'));
     }
+
     return this.#createBlockInstance({
-      data,
+      data: dataList,
       sigs,
       reward,
       diff: this.getDiff(),
@@ -1480,6 +1606,30 @@ class TinyChainInstance {
     if (typeof this.#payloadString !== 'boolean')
       throw new Error('#payloadString must be a boolean');
     return this.#payloadString;
+  }
+
+  /**
+   * Gets the maximum allowed size (in bytes) in a block's content.
+   * @returns {number}
+   */
+  getBlockContentSizeLimit() {
+    return this.#blockContentSizeLimit;
+  }
+
+  /**
+   * Gets the maximum payload size allowed per transaction (in bytes).
+   * @returns {number}
+   */
+  getPayloadSizeLimit() {
+    return this.#payloadSizeLimit;
+  }
+
+  /**
+   * Gets the maximum total size allowed for a block (in bytes).
+   * @returns {number}
+   */
+  getBlockSizeLimit() {
+    return this.#blockSizeLimit;
   }
 }
 

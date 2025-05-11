@@ -104,6 +104,6 @@
   },
   "dependencies": {
     "clone": "^2.1.2",
-    "tiny-essentials": "^1.8.1"
+    "tiny-essentials": "^1.8.4"
   }
 }
