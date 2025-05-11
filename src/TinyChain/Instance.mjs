@@ -33,7 +33,7 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  * @typedef {Object} GasConfig
  * @property {bigint} [gasLimit=50000n] - The maximum allowed gas usage for the block (defaults to 50,000).
  * @property {bigint} [maxFeePerGas=200n] - The maximum fee per gas unit for the block (defaults to 200).
- * @property {bigint} [maxPriorityFeePerGas=this.priorityFeeDefault] - The priority fee per gas unit (defaults to the default value).
+ * @property {bigint} [maxPriorityFeePerGas=this.getDefaultPriorityFee()] - The priority fee per gas unit (defaults to the default value).
  */
 
 /**
@@ -542,7 +542,7 @@ class TinyChainInstance {
       payloadString: this.#payloadString,
       parser: this.#parser,
       signer: this.#signer,
-      chainId: this.chainId,
+      chainId: this.getChainId(),
       ...options,
     });
   }
@@ -568,7 +568,7 @@ class TinyChainInstance {
 
     // Transfer gas cost (symbolic)
     const transferCount = Array.isArray(transfers) ? BigInt(transfers.length) : 0n;
-    const transfersGas = transferCount * this.transferGas;
+    const transfersGas = transferCount * this.getTransferGas();
 
     return dataGas + transfersGas;
   }
@@ -676,9 +676,9 @@ class TinyChainInstance {
    */
   getCurrentReward() {
     const height = this.getChainLength();
-    if (height > this.lastBlockReward) return 0n;
-    const halvings = height / this.halvingInterval;
-    const reward = this.initialReward / 2n ** halvings;
+    if (height > this.getLastBlockReward()) return 0n;
+    const halvings = height / this.getHalvingInterval();
+    const reward = this.getInitialReward() / 2n ** halvings;
     return reward > 0n ? reward : 0n;
   }
 
@@ -699,17 +699,18 @@ class TinyChainInstance {
    * @throws {Error} Throws an error if the `execAddress` is invalid or if the gas limit is exceeded.
    */
   createBlock({ signer = this.#signer, payload = '', transfers = [], gasOptions = {} } = {}) {
-    const reward = this.currencyMode ? this.getCurrentReward() : 0n;
+    const isCurrencyMode = this.isCurrencyMode();
+    const reward = isCurrencyMode ? this.getCurrentReward() : 0n;
     const {
       gasLimit = 50000n,
       maxFeePerGas = 200n,
-      maxPriorityFeePerGas = this.priorityFeeDefault,
+      maxPriorityFeePerGas = this.getDefaultPriorityFee(),
     } = gasOptions;
 
     const address = signer.getPublicKeyHex();
     const addressType = signer.getType();
 
-    const gasUsed = this.currencyMode ? this.estimateGasUsed(transfers, payload) : 0n;
+    const gasUsed = isCurrencyMode ? this.estimateGasUsed(transfers, payload) : 0n;
     if (gasUsed > gasLimit)
       throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
     if (Array.isArray(transfers)) this.validateTransfers(address, addressType, transfers);
@@ -719,11 +720,11 @@ class TinyChainInstance {
       address,
       addressType,
       payload,
-      gasLimit: this.currencyMode ? gasLimit : 0n,
+      gasLimit: isCurrencyMode ? gasLimit : 0n,
       gasUsed,
-      baseFeePerGas: this.currencyMode ? this.baseFeePerGas : 0n,
-      maxFeePerGas: this.currencyMode ? maxFeePerGas : 0n,
-      maxPriorityFeePerGas: this.currencyMode ? maxPriorityFeePerGas : 0n,
+      baseFeePerGas: isCurrencyMode ? this.getBaseFeePerGas() : 0n,
+      maxFeePerGas: isCurrencyMode ? maxFeePerGas : 0n,
+      maxPriorityFeePerGas: isCurrencyMode ? maxPriorityFeePerGas : 0n,
     };
 
     const sig = signer.signECDSA(this.#parser.serializeDeep(data), 'utf-8');
@@ -731,7 +732,7 @@ class TinyChainInstance {
     return this.#createBlockInstance({
       data: [data],
       sigs: [sig.toString('hex')],
-      diff: this.diff,
+      diff: this.getDiff(),
       reward,
     });
   }
@@ -766,7 +767,7 @@ class TinyChainInstance {
         const isValid = this.isValidNewBlock(newBlock);
         if (!isValid) throw new Error('Block mining invalid');
 
-        if (this.currencyMode || this.payloadMode) this.updateBalance(newBlock);
+        if (this.isCurrencyMode() || this.isPayloadMode()) this.updateBalance(newBlock);
         this.chain.push(newBlock);
         this.#emit(TinyChainEvents.NewBlock, newBlock);
         return newBlock;
@@ -796,7 +797,7 @@ class TinyChainInstance {
       const isValid = this.isValidNewBlock(minedBlock);
       if (!isValid) throw new Error('Invalid block cannot be added to the chain.');
 
-      if (this.currencyMode || this.payloadMode) this.updateBalance(minedBlock);
+      if (this.isCurrencyMode() || this.isPayloadMode()) this.updateBalance(minedBlock);
       this.chain.push(minedBlock);
       this.#emit(TinyChainEvents.NewBlock, minedBlock);
       return minedBlock;
@@ -839,7 +840,7 @@ class TinyChainInstance {
   startBalances() {
     this.balances = {};
     this.#emit(TinyChainEvents.BalancesInitialized, this.balances);
-    if (this.currencyMode) {
+    if (this.isCurrencyMode()) {
       for (const [address, balance] of Object.entries(this.getInitialBalances())) {
         this.balances[address] = BigInt(balance);
         this.#emit(TinyChainEvents.BalanceStarted, address, this.balances[address]);
@@ -860,7 +861,7 @@ class TinyChainInstance {
    * or if the sender is unauthorized or lacks balance.
    */
   validateTransfers(pubKey, addressType, transfers, balances = this.balances) {
-    const isAdmin = this.admins.has(pubKey);
+    const isAdmin = this.getAdmins().has(pubKey);
     const address = this.#signer.getAddress(Buffer.from(pubKey, 'hex'), addressType);
 
     if (!Array.isArray(transfers)) throw new Error('Transaction transfers must be an array.');
@@ -934,9 +935,9 @@ class TinyChainInstance {
         const addressType = data.addressType;
         const execAddress = this.#signer.getAddress(Buffer.from(data.address, 'hex'), addressType);
 
-        if (this.currencyMode) {
+        if (this.isCurrencyMode()) {
           const transfers = data.transfers;
-          const isAdmin = this.admins.has(data.address);
+          const isAdmin = this.getAdmins().has(data.address);
           if (Array.isArray(transfers))
             this.validateTransfers(data.address, addressType, transfers, balances);
 
@@ -1002,7 +1003,7 @@ class TinyChainInstance {
             });
         }
 
-        if (this.payloadMode && emitEvents)
+        if (this.isPayloadMode() && emitEvents)
           this.#emit(TinyChainEvents.Payload, execAddress, data.payload);
       }
 
@@ -1035,7 +1036,7 @@ class TinyChainInstance {
    * @throws {Error} Throws if `currencyMode` is disabled .
    */
   getBalances() {
-    if (!this.currencyMode) throw new Error('Currency mode must be enabled.');
+    if (!this.isCurrencyMode()) throw new Error('Currency mode must be enabled.');
     /** @type {Balances} */
     const result = {};
     for (const [addr, amount] of Object.entries(this.balances)) result[addr] = amount;
@@ -1058,7 +1059,7 @@ class TinyChainInstance {
    * @throws {Error} Throws if `currencyMode` is disabled or if the index is invalid.
    */
   getBalancesAt(startIndex = 0, endIndex = null) {
-    if (!this.currencyMode && !this.payloadMode)
+    if (!this.isCurrencyMode() && !this.isPayloadMode())
       throw new Error('Currency mode or payload mode must be enabled.');
     const end = endIndex !== null ? endIndex : this.chain.length - 1;
     if (startIndex < 0 || end >= this.chain.length || startIndex > end)
@@ -1099,7 +1100,7 @@ class TinyChainInstance {
    * @throws {Error} Throws if `currencyMode` is disabled.
    */
   getBalance(address) {
-    if (!this.currencyMode) throw new Error('Currency mode must be enabled.');
+    if (!this.isCurrencyMode()) throw new Error('Currency mode must be enabled.');
     if (typeof this.balances[address] === 'bigint') return this.balances[address];
     return 0n;
   }
@@ -1117,7 +1118,7 @@ class TinyChainInstance {
    */
   recalculateBalances() {
     this.startBalances();
-    if (this.currencyMode || this.payloadMode)
+    if (this.isCurrencyMode() || this.isPayloadMode())
       for (const block of this.chain) this.updateBalance(block);
     this.#emit(TinyChainEvents.BalanceRecalculated, this.balances);
   }
@@ -1270,6 +1271,7 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getBaseFeePerGas() {
+    if (typeof this.baseFeePerGas !== 'bigint') throw new Error('baseFeePerGas must be a bigint');
     return this.baseFeePerGas;
   }
 
@@ -1278,6 +1280,8 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getDefaultPriorityFee() {
+    if (typeof this.priorityFeeDefault !== 'bigint')
+      throw new Error('priorityFeeDefault must be a bigint');
     return this.priorityFeeDefault;
   }
 
@@ -1286,6 +1290,7 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getTransferGas() {
+    if (typeof this.transferGas !== 'bigint') throw new Error('transferGas must be a bigint');
     return this.transferGas;
   }
 
@@ -1294,6 +1299,7 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getDiff() {
+    if (typeof this.diff !== 'bigint') throw new Error('diff must be a bigint');
     return this.diff;
   }
 
@@ -1302,6 +1308,7 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getInitialReward() {
+    if (typeof this.initialReward !== 'bigint') throw new Error('initialReward must be a bigint');
     return this.initialReward;
   }
 
@@ -1310,6 +1317,8 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getHalvingInterval() {
+    if (typeof this.halvingInterval !== 'bigint')
+      throw new Error('halvingInterval must be a bigint');
     return this.halvingInterval;
   }
 
@@ -1318,6 +1327,8 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getLastBlockReward() {
+    if (typeof this.lastBlockReward !== 'bigint')
+      throw new Error('lastBlockReward must be a bigint');
     return this.lastBlockReward;
   }
 
@@ -1326,6 +1337,7 @@ class TinyChainInstance {
    * @returns {bigint}
    */
   getChainId() {
+    if (typeof this.chainId !== 'bigint') throw new Error('chainId must be a bigint');
     return this.chainId;
   }
 
@@ -1334,6 +1346,7 @@ class TinyChainInstance {
    * @returns {boolean}
    */
   isCurrencyMode() {
+    if (typeof this.currencyMode !== 'boolean') throw new Error('currencyMode must be a boolean');
     return this.currencyMode;
   }
 
@@ -1342,15 +1355,20 @@ class TinyChainInstance {
    * @returns {boolean}
    */
   isPayloadMode() {
+    if (typeof this.payloadMode !== 'boolean') throw new Error('payloadMode must be a boolean');
     return this.payloadMode;
   }
 
   /**
    * Returns a list of all admin addresses.
-   * @returns {string[]}
+   * @returns {Set<string>}
    */
   getAdmins() {
-    return Array.from(this.admins);
+    if (!(this.admins instanceof Set)) throw new Error('admins must be a Set');
+    for (const addr of this.admins) {
+      if (typeof addr !== 'string') throw new Error('Each admin address must be a string');
+    }
+    return this.admins;
   }
 
   /**
@@ -1358,6 +1376,8 @@ class TinyChainInstance {
    * @returns {boolean}
    */
   isPayloadString() {
+    if (typeof this.#payloadString !== 'boolean')
+      throw new Error('#payloadString must be a boolean');
     return this.#payloadString;
   }
 }
