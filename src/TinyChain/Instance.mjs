@@ -740,14 +740,31 @@ class TinyChainInstance {
     gasOptions = {},
   } = {}) {
     const isCurrencyMode = this.isCurrencyMode();
+
+    if (typeof payload !== 'string') throw new Error('Payload must be a string');
+    if (!(signer instanceof TinySecp256k1))
+      throw new Error('Invalid signer: expected TinySecp256k1-compatible object');
+    if (!Array.isArray(transfers)) throw new Error('Transfers must be an array');
+
     const {
       gasLimit = 50000n,
       maxFeePerGas = 200n,
       maxPriorityFeePerGas = this.getDefaultPriorityFee(),
     } = gasOptions;
 
+    if (
+      typeof gasLimit !== 'bigint' ||
+      typeof maxFeePerGas !== 'bigint' ||
+      typeof maxPriorityFeePerGas !== 'bigint'
+    )
+      throw new Error('Gas parameters must be BigInt');
+
     const address = signer.getPublicKeyHex();
     const addressType = signer.getType();
+
+    if (typeof address !== 'string') throw new Error('Address value must be string');
+    if (typeof addressType !== 'string' || addressType.length === 0)
+      throw new Error('Invalid address type');
 
     const gasUsed = isCurrencyMode ? this.estimateGasUsed(transfers, payload) : 0n;
     if (gasUsed > gasLimit)
@@ -766,7 +783,11 @@ class TinyChainInstance {
       maxPriorityFeePerGas: isCurrencyMode ? maxPriorityFeePerGas : 0n,
     };
 
-    const sig = signer.signECDSA(this.#parser.serializeDeep(data), 'utf-8');
+    const serialized = this.#parser.serializeDeep(data);
+    if (typeof serialized !== 'string' || serialized.length === 0)
+      throw new Error('Failed to serialize block content');
+
+    const sig = signer.signECDSA(serialized, 'utf-8');
     return { data, sig };
   }
 
@@ -780,14 +801,29 @@ class TinyChainInstance {
    *
    * @param {BlockContent[]} content - An array of signed block content objects, each containing transaction data and its signature.
    * @returns {TinyChainBlock} The newly created block instance with all aggregated data, ready to be appended to the chain.
+   * @throws {Error}
    */
   createBlock(content) {
+    if (!Array.isArray(content) || content.length === 0)
+      throw new Error('Content must be a non-empty array of BlockContent');
+
     const reward = this.isCurrencyMode() ? this.getCurrentReward() : 0n;
     const data = [];
     const sigs = [];
-    for (const item of content) {
+    for (const [index, item] of content.entries()) {
+      const sig = item.sig;
+      if (
+        typeof item !== 'object' ||
+        item === null ||
+        typeof item.data !== 'object' ||
+        item.data === null
+      )
+        throw new Error(`Invalid BlockContent at index ${index}`);
+      if (!Buffer.isBuffer(sig) && typeof sig !== 'string')
+        throw new Error(`Signature at index ${index} must be a Buffer or hex string`);
+
       data.push(item.data);
-      sigs.push(typeof item.sig === 'string' ? item.sig : item.sig.toString('hex'));
+      sigs.push(typeof sig === 'string' ? sig : sig.toString('hex'));
     }
     return this.#createBlockInstance({
       data,

@@ -147,10 +147,10 @@ class TinySecp256k1 {
    *
    * @param {string} address
    * @returns {string|null}
-   * @throws {TypeError} If address is not a string.
+   * @throws {Error} If address is not a string.
    */
   getPrefixType(address) {
-    if (typeof address !== 'string') throw new TypeError('Expected address to be a string.');
+    if (typeof address !== 'string') throw new Error('Expected address to be a string.');
     for (const type in this.types) {
       const prefix = this.types[type];
       if (address.startsWith(prefix)) return type;
