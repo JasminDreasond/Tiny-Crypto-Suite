@@ -350,8 +350,8 @@ class TinyChainBlock {
    * and ensures that the signature is valid. If any signature is invalid,
    * it throws an error identifying the problematic transaction and its index.
    *
-   * @throws {Error} If any transaction has an invalid ECDSA signature or if the
-   * number of validated transactions does not match the expected count.
+   * @throws {Error} If any transaction has an invalid ECDSA signature,
+   * or if any transaction has an address equal to "0".
    */
   validateSig() {
     const dc = this.getData();
@@ -359,6 +359,8 @@ class TinyChainBlock {
     for (const index in dc) {
       const data = dc[index];
       const sig = sigs[index];
+      if (data.address === '0')
+        throw new Error(`Transaction at index "${index}" has an invalid address "0".`);
       if (
         !this.#signer.verifyECDSA(
           this.#parser.serializeDeep(data),
