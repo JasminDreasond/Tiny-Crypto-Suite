@@ -839,6 +839,12 @@ class TinyChainInstance {
     return reward > 0n ? reward : 0n;
   }
 
+  /** @type {Object<string, string>} */
+  invalidAddress = {
+    0: 'NULL',
+    1: 'UNKNOWN',
+  };
+
   /**
    * Validates the transaction content before inclusion in a block.
    * This method checks payload format, transfer structure, gas-related constraints,
@@ -888,6 +894,9 @@ class TinyChainInstance {
     if (typeof address !== 'string') throw new Error('Address value must be string');
     if (typeof addressType !== 'string' || addressType.length === 0)
       throw new Error('Invalid address type');
+    const invalidValue = this.invalidAddress[address];
+    if (typeof invalidValue === 'string')
+      throw new Error(`Transaction has an invalid address "${address}" (${invalidValue}).`);
 
     const totalGas = gasUsed + this.getBaseFeePerGas();
     if (totalGas > gasLimit)

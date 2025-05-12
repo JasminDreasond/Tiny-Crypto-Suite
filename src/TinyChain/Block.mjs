@@ -342,6 +342,12 @@ class TinyChainBlock {
     if (firstValidation) this.validateSig();
   }
 
+  /** @type {Record<string, string>} */
+  invalidAddress = {
+    0: 'NULL',
+    1: 'UNKNOWN',
+  };
+
   /**
    * Validates the integrity of each transaction inside the block by verifying
    * its ECDSA signature using the associated address.
@@ -359,8 +365,11 @@ class TinyChainBlock {
     for (const index in dc) {
       const data = dc[index];
       const sig = sigs[index];
-      if (data.address === '0')
-        throw new Error(`Transaction at index "${index}" has an invalid address "0".`);
+      const invalidValue = this.invalidAddress[data.address];
+      if (typeof invalidValue === 'string')
+        throw new Error(
+          `Transaction at index "${index}" has an invalid address "${data.address}" (${invalidValue}).`,
+        );
       if (
         !this.#signer.verifyECDSA(
           this.#parser.serializeDeep(data),
