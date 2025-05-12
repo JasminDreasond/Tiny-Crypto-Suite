@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { formatBytes, TinyPromiseQueue } from 'tiny-essentials';
+import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
@@ -66,6 +66,7 @@ class TinyChainInstance {
   #blockSizeLimit;
   #payloadSizeLimit;
   #blockContentSizeLimit;
+  #textEncoder = new TextEncoder();
 
   /**
    * Important instance used to make event emitter.
@@ -271,7 +272,7 @@ class TinyChainInstance {
    * @param {Balances} [options.initialBalances={}] - Optional mapping of initial addresses to balances.
    * @param {string[]} [options.admins=[]] - List of admin public keys granted elevated permissions.
    *
-   * @param {number} [options.blockContentSizeLimit=-1] - Defines the maximum number of items allowed inside a single block's content.
+   * @param {number} [options.blockContentSizeLimit=-1] - Defines the maximum size (in bytes) allowed inside a single block's content.
    * A value of -1 disables the limit entirely.
    *
    * @param {number} [options.blockSizeLimit=-1] - Defines the total maximum size (in bytes) for an entire block.
@@ -635,14 +636,33 @@ class TinyChainInstance {
    *
    */
   #createBlockInstance(options) {
-    return new TinyChainBlock({
+    const blockConfig = {
       baseFeePerGas: this.isCurrencyMode() ? this.getBaseFeePerGas() : 0n,
       payloadString: this.#payloadString,
       parser: this.#parser,
       signer: this.#signer,
       chainId: this.getChainId(),
       ...options,
-    });
+    };
+
+    if (this.#blockSizeLimit >= 0) {
+      const blockSize = this.#textEncoder.encode(
+        this.#parser.serializeDeep(
+          Object.fromEntries(
+            Object.entries(blockConfig).filter(
+              ([key, value]) => typeof value !== 'function' && !['parser', 'signer'].includes(key),
+            ),
+          ),
+        ),
+      ).length;
+
+      if (blockSize > this.#blockSizeLimit)
+        throw new Error(
+          `Block size exceeded: block is ${blockSize} bytes, limit is ${this.#blockSizeLimit} bytes`,
+        );
+    }
+
+    return new TinyChainBlock(blockConfig);
   }
 
   /**
@@ -800,12 +820,14 @@ class TinyChainInstance {
    * @param {string} [options.address] - Sender address of the transaction.
    * @param {string} [options.addressType] - Type of address (e.g., 'user', 'contract'). Must be a non-empty string.
    *
-   * @throws {Error} If payload is not a string.
+   * @throws {Error} If payload is not a string when required.
    * @throws {Error} If transfers is not an array.
    * @throws {Error} If any gas parameter is not a BigInt.
    * @throws {Error} If address is not a string.
    * @throws {Error} If addressType is invalid.
    * @throws {Error} If gas used exceeds the provided gas limit.
+   * @throws {Error} If block content size exceeds the defined block content size limit.
+   * @throws {Error} If payload size exceeds the defined payload size limit.
    *
    * @returns {bigint} Returns the estimated gas used for the transaction.
    */
@@ -818,7 +840,8 @@ class TinyChainInstance {
     address,
     addressType,
   } = {}) {
-    if (typeof payload !== 'string') throw new Error('Payload must be a string');
+    if (this.#payloadString && typeof payload !== 'string')
+      throw new Error('Payload must be a string');
     if (!Array.isArray(transfers)) throw new Error('Transfers must be an array');
     const gasUsed = this.isCurrencyMode() ? this.estimateGasUsed(transfers, payload) : 0n;
 
@@ -833,9 +856,41 @@ class TinyChainInstance {
     if (typeof addressType !== 'string' || addressType.length === 0)
       throw new Error('Invalid address type');
 
-    if (gasUsed > gasLimit)
-      throw new Error(`Gas limit exceeded: used ${gasUsed} > limit ${gasLimit}`);
+    const totalGas = gasUsed + this.getBaseFeePerGas();
+    if (totalGas > gasLimit)
+      throw new Error(`Gas limit exceeded: used ${totalGas} > limit ${gasLimit}`);
     if (Array.isArray(transfers)) this.validateTransfers(address, addressType, transfers);
+
+    if (this.#payloadSizeLimit >= 0) {
+      const payloadSize = this.#textEncoder.encode(
+        this.#payloadString ? payload : this.#parser.serializeDeep(payload),
+      ).length;
+
+      if (payloadSize > this.#payloadSizeLimit)
+        throw new Error(
+          `Payload size exceeded: payload is ${payloadSize} bytes, limit is ${this.#payloadSizeLimit} bytes`,
+        );
+    }
+
+    if (this.#blockContentSizeLimit >= 0) {
+      const blockContentSize = this.#textEncoder.encode(
+        this.#parser.serializeDeep({
+          payload,
+          transfers,
+          gasLimit,
+          maxFeePerGas,
+          maxPriorityFeePerGas,
+          address,
+          addressType,
+        }),
+      ).length;
+
+      if (blockContentSize > this.#blockContentSizeLimit)
+        throw new Error(
+          `Block content size exceeded: content is ${blockContentSize} bytes, limit is ${this.#blockContentSizeLimit} bytes`,
+        );
+    }
+
     return gasUsed;
   }
 
