@@ -75,12 +75,45 @@ class TinyChainInstance {
   #events = new EventEmitter();
 
   /**
+   * Important instance used to make system event emitter.
+   * @type {EventEmitter}
+   */
+  #sysEvents = new EventEmitter();
+  #sysEventsUsed = false;
+
+  /**
    * Emits an event with optional arguments to all system emit.
    * @param {string | symbol} event - The name of the event to emit.
    * @param {...any} args - Arguments passed to event listeners.
    */
   #emit(event, ...args) {
     this.#events.emit(event, ...args);
+    if (this.#sysEventsUsed) this.#sysEvents.emit(event, ...args);
+  }
+
+  /**
+   * Provides access to a secure internal EventEmitter for subclass use only.
+   *
+   * This method exposes a dedicated EventEmitter instance intended specifically for subclasses
+   * that extend the main class. It prevents subclasses from accidentally or intentionally using
+   * the primary class's public event system (`emit`), which could lead to unpredictable behavior
+   * or interference in the base class's event flow.
+   *
+   * For security and consistency, this method is designed to be accessed only once.
+   * Multiple accesses are blocked to avoid leaks or misuse of the internal event bus.
+   *
+   * @returns {EventEmitter} A special internal EventEmitter instance for subclass use.
+   * @throws {Error} If the method is called more than once.
+   */
+  getSysEvents() {
+    if (this.#sysEventsUsed)
+      throw new Error(
+        'Access denied: getSysEvents() can only be called once. ' +
+          'This restriction ensures subclass event isolation and prevents accidental interference ' +
+          'with the main class event emitter.',
+      );
+    this.#sysEventsUsed = true;
+    return this.#sysEvents;
   }
 
   /**
