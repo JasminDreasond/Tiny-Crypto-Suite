@@ -11,7 +11,7 @@ import TinySecp256k1Mock from './Secp256k1/Mock.mjs';
  *
  * To create a working instance, use {@link TinyChain.Instance}, and {@link TinyChain.Events} to access the event names
  *
- * This class is **not available for production mode**.
+ * This class is in beta version!
  *
  * @beta
  * @class

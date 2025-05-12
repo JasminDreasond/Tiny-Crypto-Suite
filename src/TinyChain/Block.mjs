@@ -92,7 +92,7 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  */
 
 /**
- * Represents a single block within the TinyDataChain structure.
+ * Represents a single block within the TinyChain structure.
  *
  * A block stores a list of transaction data, gas metrics, and
  * metadata used for validation and mining. It includes fields

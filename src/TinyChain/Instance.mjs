@@ -233,12 +233,7 @@ class TinyChainInstance {
   hasGenesisBlock() {
     if (this.#getChain().length === 0) return false;
     const firstBlock = this.getFirstBlock();
-    return (
-      firstBlock.index === 0n &&
-      firstBlock.prevHash === '0' &&
-      firstBlock.data[0] &&
-      firstBlock.data[0].address === '0'
-    );
+    return firstBlock.index === 0n && firstBlock.prevHash === '0';
   }
 
   /**
@@ -602,7 +597,7 @@ class TinyChainInstance {
    * before creating the genesis block. If the chain already contains blocks,
    * an error is thrown. The created genesis block is added to the chain and returned.
    *
-   * @param {TinySecp256k1} [signer=this.#sender] - The address that is executing the block, typically the transaction sender.
+   * @param {TinySecp256k1} [signer=this.#signer] - The address that is executing the block, typically the transaction sender.
    *
    * @returns {TinyChainBlock} The genesis block that was created and added to the chain.
    * @throws {Error} If the blockchain already contains a genesis block.
@@ -644,7 +639,7 @@ class TinyChainInstance {
    * exclusive access during the setup phase. It emits an `Initialized` event
    * once the genesis block has been created and added to the chain.
    *
-   * @param {TinySecp256k1} [signer=this.#sender] - The address that is executing the block, typically the transaction sender.
+   * @param {TinySecp256k1} [signer=this.#signer] - The address that is executing the block, typically the transaction sender.
    *
    * @returns {Promise<void>} A promise that resolves once initialization is complete.
    *
@@ -943,7 +938,7 @@ class TinyChainInstance {
    * limit is not exceeded before creating the block. It also includes reward information if `currencyMode` is enabled.
    *
    * @param {Object} [options={}] - Block options.
-   * @param {TinySecp256k1} [options.signer=this.#sender] - The address that is executing the block, typically the transaction sender.
+   * @param {TinySecp256k1} [options.signer=this.#signer] - The address that is executing the block, typically the transaction sender.
    * @param {string} [options.payload=''] - The data to be included in the block's payload. Default is an empty string.
    * @param {Array<Transaction>} [options.transfers=[]] - The list of transfers (transactions) to be included in the block.
    * @param {GasConfig} [options.gasOptions={}] - Optional gas-related configuration.
@@ -1008,10 +1003,11 @@ class TinyChainInstance {
    * The block is finalized by calling an internal method that handles structural assembly and final consistency.
    *
    * @param {BlockContent[]} content - An array of signed block content objects, each containing transaction data and its signature.
+   * @param {TinySecp256k1} [signer=this.#signer] - The address that is executing the block, typically the transaction sender.
    * @returns {TinyChainBlock} The newly created block instance with all aggregated data, ready to be appended to the chain.
    * @throws {Error}
    */
-  createBlock(content) {
+  createBlock(content, signer = this.#signer) {
     if (!Array.isArray(content) || content.length === 0)
       throw new Error('Content must be a non-empty array of BlockContent');
 
@@ -1044,6 +1040,7 @@ class TinyChainInstance {
       data: dataList,
       sigs,
       reward,
+      signer,
       diff: this.getDiff(),
     });
   }

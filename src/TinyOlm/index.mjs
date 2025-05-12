@@ -5,9 +5,9 @@ import TinyOlmInstance from './Instance.mjs';
 /**
  * TinyOlm is a lightweight wrapper for handling encryption sessions using the Olm cryptographic library.
  *
- * To create a working instance, use {@link TinyOlm.Instance}, and {@link TinyOlm.Events} to access the event names
+ * To create a working instance, use {@link TinyOlm.Instance}, and {@link TinyOlm.Events} to access the event names.
  *
- * This class is **not available for production mode**.
+ * This class is in beta version!
  *
  * @beta
  * @class
