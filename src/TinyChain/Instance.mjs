@@ -1183,8 +1183,8 @@ class TinyChainInstance {
         typeof to !== 'string' ||
         from.length < 1 ||
         to.length < 1 ||
-        !this.#signer.validateAddress(from, 'guess').valid ||
-        !this.#signer.validateAddress(to, 'guess').valid
+        (from !== '1' && !this.#signer.validateAddress(from, 'guess').valid) ||
+        (to !== '0' && !this.#signer.validateAddress(to, 'guess').valid)
       )
         throw new Error('Invalid from/to address!');
 

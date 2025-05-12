@@ -96,6 +96,7 @@ const tinyWalletSimulation = async () => {
     .catch((err) => console.log(red("❌ As expected, Bob can't send from Charlie:"), err.message));
 
   const block4 = createBlock({
+    gasOptions: { gasLimit: 52000n },
     signer: bob,
     payload: 'Bob pays back',
     transfers: [
@@ -103,6 +104,11 @@ const tinyWalletSimulation = async () => {
         from: bob.getAddress(),
         to: charlie.getAddress(),
         amount: 1000000n,
+      },
+      {
+        from: bob.getAddress(),
+        to: '0',
+        amount: 2250n,
       },
     ],
   });
