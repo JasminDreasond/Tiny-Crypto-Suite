@@ -1233,6 +1233,7 @@ class TinyChainInstance {
 
     if (Array.isArray(block.data)) {
       let totalGasCollected = 0n;
+      let totalGasBurned = 0n;
       for (const data of block.data) {
         if (typeof data.address !== 'string')
           throw new Error(`Invalid address: expected a string, got "${typeof data.address}"`);
@@ -1274,9 +1275,18 @@ class TinyChainInstance {
 
           if (isSufficientBalance) {
             totalGasCollected += totalFee;
+            totalGasCollected -= baseFeePerGas;
             balances[execAddress] -= totalFee;
+            totalGasBurned += baseFeePerGas;
           } else {
-            totalGasCollected += balances[execAddress];
+            if (balances[execAddress] >= baseFeePerGas) {
+              totalGasCollected += balances[execAddress];
+              totalGasCollected -= baseFeePerGas;
+              totalGasBurned += baseFeePerGas;
+            } else {
+              totalGasBurned += balances[execAddress];
+            }
+
             balances[execAddress] = 0n;
           }
 
@@ -1327,6 +1337,22 @@ class TinyChainInstance {
           address: minerAddr,
           totalReward,
         });
+
+      if (minerAddr !== '0') {
+        if (!balances['0']) {
+          balances['0'] = 0n;
+          if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, '0', balances['0']);
+        }
+        balances['0'] += totalGasBurned;
+
+        if (emitEvents)
+          this.#emit(TinyChainEvents.MinerBalanceUpdated, {
+            totalGasCollected: totalGasBurned,
+            reward: 0n,
+            address: '0',
+            totalReward: totalGasBurned,
+          });
+      }
     }
   }
 
