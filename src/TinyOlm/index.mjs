@@ -1,6 +1,6 @@
-import tinyOlm from './Module.mjs';
-import TinyOlmEvents from './Events.mjs';
-import TinyOlmInstance from './Instance.mjs';
+import tinyOlm from './TinyOlmModule.mjs';
+import TinyOlmEvents from './TinyOlmEvents.mjs';
+import TinyOlmInstance from './TinyOlmInstance.mjs';
 
 /**
  * TinyOlm is a lightweight wrapper for handling encryption sessions using the Olm cryptographic library.

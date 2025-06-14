@@ -3,8 +3,8 @@ import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
-import TinyChainEvents from './Events.mjs';
-import TinyChainBlock from './Block.mjs';
+import TinyChainEvents from './TinyChainEvents.mjs';
+import TinyChainBlock from './TinyChainBlock.mjs';
 import TinySecp256k1 from './Secp256k1/index.mjs';
 
 /**
@@ -56,11 +56,11 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  * @beta
  */
 class TinyChainInstance {
-  /** @typedef {import('./Block.mjs').NewTransaction} NewTransaction */
-  /** @typedef {import('./Block.mjs').Transaction} Transaction */
-  /** @typedef {import('./Block.mjs').TransactionData} TransactionData */
-  /** @typedef {import('./Block.mjs').GetTransactionData} GetTransactionData */
-  /** @typedef {import('./Block.mjs').BlockInitData} BlockInitData */
+  /** @typedef {import('./TinyChainBlock.mjs').NewTransaction} NewTransaction */
+  /** @typedef {import('./TinyChainBlock.mjs').Transaction} Transaction */
+  /** @typedef {import('./TinyChainBlock.mjs').TransactionData} TransactionData */
+  /** @typedef {import('./TinyChainBlock.mjs').GetTransactionData} GetTransactionData */
+  /** @typedef {import('./TinyChainBlock.mjs').BlockInitData} BlockInitData */
 
   #signer;
   #blockSizeLimit;

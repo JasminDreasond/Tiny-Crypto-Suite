@@ -1,11 +1,11 @@
-import TinyBtcSecp256k1 from './Secp256k1/Btc.mjs';
+import TinyBtcSecp256k1 from './Secp256k1/TinyBtcSecp256k1.mjs';
 import TinySecp256k1 from './Secp256k1/index.mjs';
 
-import TinyChainEvents from './Events.mjs';
-import TinyChainBlock from './Block.mjs';
-import TinyChainInstance from './Instance.mjs';
-import TinyEthSecp256k1 from './Secp256k1/Eth.mjs';
-import TinySecp256k1Mock from './Secp256k1/Mock.mjs';
+import TinyChainEvents from './TinyChainEvents.mjs';
+import TinyChainBlock from './TinyChainBlock.mjs';
+import TinyChainInstance from './TinyChainInstance.mjs';
+import TinyEthSecp256k1 from './Secp256k1/TinyEthSecp256k1.mjs';
+import TinySecp256k1Mock from './Secp256k1/TinySecp256k1Mock.mjs';
 
 /**
  *

@@ -2,8 +2,8 @@ import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
-import tinyOlm from './Module.mjs';
-import TinyOlmEvents from './Events.mjs';
+import tinyOlm from './TinyOlmModule.mjs';
+import TinyOlmEvents from './TinyOlmEvents.mjs';
 
 /**
  * TinyOlm instance is a lightweight wrapper for handling encryption sessions using the Olm cryptographic library.
