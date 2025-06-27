@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { readFileSync } from 'fs';
 import { Buffer } from 'buffer';
 import clone from 'clone';
 import { isBrowser } from './lib/os.mjs';
@@ -441,7 +441,7 @@ class TinyCertCrypto {
           : Buffer.isBuffer(this.publicCertBuffer)
             ? this.publicCertBuffer.toString('utf-8')
             : null
-        : fs.readFileSync(this.publicCertPath, 'utf-8');
+        : readFileSync(this.publicCertPath, 'utf-8');
       loadPublicKey(publicPem);
 
       // Private Key
@@ -452,7 +452,7 @@ class TinyCertCrypto {
             : Buffer.isBuffer(this.privateKeyBuffer)
               ? this.privateKeyBuffer.toString('utf-8')
               : null
-          : fs.readFileSync(this.privateKeyPath, 'utf-8');
+          : readFileSync(this.privateKeyPath, 'utf-8');
 
         loadPrivateKey(privatePem);
       }

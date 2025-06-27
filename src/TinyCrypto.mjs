@@ -1,5 +1,5 @@
 import { randomBytes, createDecipheriv, createCipheriv } from 'crypto';
-import * as fs from 'fs';
+import { writeFileSync, readFileSync } from 'fs';
 import { Buffer } from 'buffer';
 
 import { isBrowser } from './lib/os.mjs';
@@ -280,7 +280,7 @@ class TinyCrypto {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-    } else fs.writeFileSync(filename, data);
+    } else writeFileSync(filename, data);
   }
 
   /**
@@ -309,7 +309,7 @@ class TinyCrypto {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-    } else fs.writeFileSync(filename, configData);
+    } else writeFileSync(filename, configData);
   }
 
   /**
@@ -352,7 +352,7 @@ class TinyCrypto {
         reader.readAsText(file);
       });
     } else {
-      const raw = fs.readFileSync(/** @type {string} */ (file), 'utf8');
+      const raw = readFileSync(/** @type {string} */ (file), 'utf8');
       const config = JSON.parse(raw);
       return this.importConfig(config);
     }
@@ -397,7 +397,7 @@ class TinyCrypto {
         reader.readAsText(file);
       });
     } else {
-      const hexKey = fs.readFileSync(/** @type {string} */ (file), 'utf8');
+      const hexKey = readFileSync(/** @type {string} */ (file), 'utf8');
       const keyBuffer = Buffer.from(hexKey, 'hex');
       this.key = keyBuffer;
       return keyBuffer;
