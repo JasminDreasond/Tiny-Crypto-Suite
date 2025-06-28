@@ -1,3 +1,5 @@
+<center><img src="./cute-pixelcoin(200x200).png" /></center>
+
 # 🍮✨ Bitcoin Pudding Icon (Pixel Art) ✨🍮
 
 This is the tiny **pixel art icon** of a super cute Bitcoin-flavored pudding! A fun fusion between 🍮 dessert and ₿ crypto, designed with all the love and fluffiness possible.
