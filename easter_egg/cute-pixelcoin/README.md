@@ -1,4 +1,7 @@
-<center><img src="./cute-pixelcoin(200x200).png" /></center>
+<center>
+<img src="./cute-pixelcoin(200x200).png" />
+<img src="./cute-small-pixelcoin(200x200).png" height="120" />
+</center>
 
 # 🍮✨ Bitcoin Pudding Icon (Pixel Art) ✨🍮
 
