@@ -555,6 +555,112 @@ Returns the current length of the chain based on the latest block index.
 
 ---
 
+### 📦 `existsLatestBlock()`
+
+**Description:**
+Checks whether the latest block in the chain exists.
+
+**Returns:** 
+
+* `true` if there is at least one block in the chain, otherwise `false`.
+
+---
+
+### 🔍 `chainBlockIndexExists(index)`
+
+**Description:**
+Checks if a block with the given internal chain index exists.
+
+**Parameters:**
+
+* `index`: The internal `bigint` index of the block.
+
+**Returns:** 
+
+* `true` if a block with that index exists, otherwise `false`.
+
+---
+
+### 📦 `getChainBlockByIndex(index, hash?)`
+
+**Description:**
+Retrieves a block by its internal index and optionally its hash.
+
+**Throws:**
+
+* If `index` is not a `bigint`, or `hash` is not a string (when provided).
+* If no matching block is found.
+
+---
+
+### 📦 `chainBlockExists(index)`
+
+**Description:**
+Checks if a block exists at a specific array position (0-based).
+
+**Returns:** 
+
+* `true` if the array index exists, otherwise `false`.
+
+---
+
+### 🚫 `ignoreChainBlock(index, hash)`
+
+**Description:**
+Marks a block as ignored so it won't affect calculations or exports.
+
+**Throws:**
+
+* If `index` is not a `bigint`.
+* If `hash` is not a `string`.
+* If the block doesn't exist.
+
+---
+
+### 🔄 `unignoreChainBlock(index, hash)`
+
+**Description:**
+Unmarks a block as ignored.
+
+**Returns:** 
+
+* `true` if the block was ignored and is now restored.
+
+---
+
+### ❓ `isChainBlockIgnored(index, hash)`
+
+**Description:**
+Checks if a specific block is currently ignored.
+
+**Returns:** 
+
+* `true` if the block is ignored.
+
+---
+
+### ❓ `isChainBlockHashIgnored(hash)`
+
+**Description:**
+Checks if any block with the specified hash is ignored.
+
+**Returns:** 
+
+* `true` if at least one block with this hash is ignored.
+
+---
+
+### 🧾 `getIgnoredBlocks()`
+
+**Description:**
+Returns a shallow clone of all currently ignored blocks.
+
+**Returns:** 
+
+* A `Set` of strings in the format `"hash:index"`.
+
+---
+
 ### 🔍 `getChainBlock(index)` 
 
 **Description:**
@@ -622,7 +728,7 @@ This method removes all blocks from the chain, effectively resetting the blockch
 
 **Description:**
 Exports a slice of the blockchain for serialization or transfer.
-The method safely extracts and serializes blocks between two indices.
+The method safely extracts and serializes blocks between two indices, excluding ignored blocks.
 
 **Parameters:**
 
@@ -642,7 +748,7 @@ The method safely extracts and serializes blocks between two indices.
 ### 🔄 `importChain(chain)` 
 
 **Description:**
-Imports and rebuilds a blockchain from serialized block data.
+Imports and rebuilds a blockchain from serialized block data and optionally restores the ignore list.
 After import, balances are recalculated and the new chain is validated.
 
 **Emits:**
@@ -652,6 +758,7 @@ After import, balances are recalculated and the new chain is validated.
 **Parameters:**
 
 * `chain` (`string[]`): The array of serialized blocks to import.
+* `ignoredBlocks` (`Set<string>`): A `Set` of ignored block identifiers (`hash:index`).
 
 **Throws:**
 
