@@ -16,8 +16,7 @@ const tinyWalletSimulation = async () => {
 
   console.log(bold(cyan('\n🌱🔹━[ Tiny Wallet Simulation ]━🔹🌱\n')));
 
-  console.log('⚙️  Initializing test blockchain...');
-
+  console.log('⚙️  Initializing blockchain accounts...');
   const adminUser = new TinyChain.Btc256k1();
   const alice = new TinyChain.Btc256k1();
   const bob = new TinyChain.Btc256k1();
@@ -41,6 +40,7 @@ const tinyWalletSimulation = async () => {
     halvingInterval: 3,
   };
 
+  console.log('⚙️  Initializing test blockchain...');
   const chain = new TinyChain.Instance(chainCfg);
   await chain.init();
   const createBlock = (content) => chain.createBlock([chain.createBlockContent(content)]);
@@ -124,9 +124,11 @@ const tinyWalletSimulation = async () => {
 
   console.log(bold('\n📤 ━━━ Chain Export/Import ━━━━━━━━━'));
 
+  // chain.ignoreChainBlock(chain.getChainBlock(1).getIndex(), chain.getChainBlock(1).getHash());
   const exportedChain = chain.exportChain();
   const newChain = new TinyChain.Instance(chainCfg);
-  newChain.importChain(exportedChain);
+
+  newChain.importChain(exportedChain, chain.getIgnoredBlocks());
   console.log('📦 Imported chain');
 
   console.log(bold('\n📊 ━━━ Imported Chain Balances ━━━━'));

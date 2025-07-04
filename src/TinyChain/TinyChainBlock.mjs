@@ -460,16 +460,16 @@ class TinyChainBlock {
 
   /**
    * Mines the block until a valid hash is found.
-   * @param {string|null} minerAddress - Address of the miner.
+   * @param {string|null} [minerAddress] - Address of the miner.
    * @param {{ prevHash?: string, index?: bigint, onComplete?: function, onProgress?: function }} [options={}]
    * @returns {Promise<{ nonce: bigint, hash: string, success: boolean }>}
    * @throws {Error} If the address is invalid.
    */
   async mine(minerAddress = null, { prevHash = '0', index = 0n, onComplete, onProgress } = {}) {
-    if (typeof minerAddress !== 'string')
+    if (minerAddress !== null && typeof minerAddress !== 'string')
       throw new Error(`Invalid address: expected a string, got "${typeof minerAddress}"`);
 
-    if (minerAddress.trim().length === 0)
+    if (typeof minerAddress === 'string' && minerAddress.trim().length === 0)
       throw new Error('Invalid address: address string cannot be empty or only whitespace');
 
     const difficultyPrefix = '0'.repeat(Number(this.diff));
@@ -493,7 +493,7 @@ class TinyChainBlock {
           const elapsedSeconds = (endTime - startTime) / 1000;
           const hashrate = (attempts / elapsedSeconds).toFixed(2);
           if (typeof onComplete === 'function') onComplete(parseFloat(hashrate));
-          if (minerAddress) this.miner = minerAddress;
+          this.miner = typeof minerAddress === 'string' ? minerAddress : null;
 
           this.txs = {};
           if (Array.isArray(this.data)) {

@@ -679,11 +679,11 @@ class TinyChainInstance {
    *
    * @param {TinySecp256k1} [signer=this.#signer] - The address that is executing the block, typically the transaction sender.
    *
-   * @returns {TinyChainBlock} The genesis block that was created and added to the chain.
+   * @returns {Promise<TinyChainBlock>} The genesis block that was created and added to the chain.
    * @throws {Error} If the blockchain already contains a genesis block.
    *
    */
-  #init(signer = this.#signer) {
+  async #init(signer = this.#signer) {
     const chain = this.#getChain();
     if (chain.length > 0) throw new Error('Blockchain already initialized with a genesis block');
 
@@ -697,18 +697,18 @@ class TinyChainInstance {
       maxFeePerGas: 0n,
       maxPriorityFeePerGas: 0n,
     };
-
     const sig = signer.signECDSA(this.#parser.serializeDeep(data), 'utf-8');
-
-    const block = this.#createBlockInstance({
-      index: 0n,
-      prevHash: '0',
-      baseFeePerGas: 0n,
-      firstValidation: false,
-      data: [data],
-      sigs: [sig.toString('hex')],
-    });
-    chain.push(block);
+    const block = await this.mineBlock(
+      null,
+      this.#createBlockInstance({
+        signer,
+        reward: 0n,
+        baseFeePerGas: 0n,
+        diff: 0n,
+        data: [data],
+        sigs: [sig.toString('hex')],
+      }),
+    );
     return block;
   }
 
@@ -726,10 +726,8 @@ class TinyChainInstance {
    * @emits Initialized - When the genesis block is successfully created and added.
    */
   async init(signer = this.#signer) {
-    return this.#queue.enqueue(async () => {
-      const block = this.#init(signer);
-      this.#emit(TinyChainEvents.Initialized, block);
-    });
+    const block = await this.#init(signer);
+    this.#emit(TinyChainEvents.Initialized, block);
   }
 
   /**
@@ -745,7 +743,7 @@ class TinyChainInstance {
    */
   #createBlockInstance(options) {
     const blockConfig = {
-      baseFeePerGas: this.isCurrencyMode() ? this.getBaseFeePerGas() : 0n,
+      baseFeePerGas: this.getBaseFeePerGas(),
       payloadString: this.#payloadString,
       parser: this.#parser,
       signer: this.#signer,
@@ -821,20 +819,37 @@ class TinyChainInstance {
     if (!current) return null;
     if (!(current instanceof TinyChainBlock))
       throw new Error('Current block is not a valid TinyChainBlock instance.');
+    let result = false;
     try {
+      if (
+        this.isChainBlockIgnored(current.getIndex(), current.getHash()) ||
+        this.isChainBlockHashIgnored(current.getPrevHash() || '')
+      ) {
+        result = true;
+        return true;
+      }
       current.validateSig();
     } catch {
       return false;
     } finally {
+      if (result) return true;
       if (current.hash !== current.calculateHash()) return false;
       if (previous) {
         if (!(previous instanceof TinyChainBlock))
           throw new Error('Previous block is not a valid TinyChainBlock instance.');
         try {
+          if (
+            this.isChainBlockIgnored(previous.getIndex(), previous.getHash()) ||
+            this.isChainBlockHashIgnored(previous.getPrevHash() || '')
+          ) {
+            result = true;
+            return true;
+          }
           previous.validateSig();
         } catch {
           return false;
         } finally {
+          if (result) return true;
           if (current.prevHash !== previous.hash) return false;
         }
       }
@@ -856,7 +871,7 @@ class TinyChainInstance {
     const chain = this.#getChain();
     const end = endIndex ?? chain.length - 1;
 
-    for (let i = Math.max(startIndex, 1); i <= end; i++) {
+    for (let i = startIndex; i <= end; i++) {
       const current = chain[i];
       const previous = chain[i - 1];
       const result = this.#isValidBlock(current, previous);
@@ -875,7 +890,10 @@ class TinyChainInstance {
    * @param {TinyChainBlock} [prevBlock=this.getLatestBlock()] - The prev block to validate.
    * @returns {boolean|null} Returns `true` if the new block is valid, otherwise `false` or `null`.
    */
-  isValidNewBlock(newBlock, prevBlock = this.getLatestBlock()) {
+  isValidNewBlock(
+    newBlock,
+    prevBlock = this.existsLatestBlock() ? this.getLatestBlock() : undefined,
+  ) {
     return this.#isValidBlock(newBlock, prevBlock);
   }
 
@@ -1133,7 +1151,7 @@ class TinyChainInstance {
    * - Update balances if `currencyMode` or `payloadMode` is enabled.
    * - Add the mined block to the blockchain and emit an event for the new block.
    *
-   * @param {string} minerAddress - The address of the miner who is mining the block.
+   * @param {string|null} minerAddress - The address of the miner who is mining the block.
    * @param {TinyChainBlock} newBlock - The new block instance to be mined.
    *
    * @emits NewBlock - When the new block is added.
@@ -1145,10 +1163,10 @@ class TinyChainInstance {
   mineBlock(minerAddress, newBlock) {
     return this.#queue.enqueue(async () => {
       const mineNow = async () => {
-        const previousBlock = this.getLatestBlock();
+        const previousBlock = this.existsLatestBlock() ? this.getLatestBlock() : null;
         const result = await newBlock.mine(minerAddress, {
-          prevHash: previousBlock.hash,
-          index: previousBlock.index + 1n,
+          prevHash: previousBlock ? previousBlock.hash : '0',
+          index: previousBlock ? previousBlock.index + 1n : 0n,
         });
 
         if (!result.success) throw new Error('Block mining failed');
@@ -1212,6 +1230,17 @@ class TinyChainInstance {
    */
   getLatestBlock() {
     return this.getChainBlock(this.#getChain().length - 1);
+  }
+
+  /**
+   * Checks the latest block in the blockchain.
+   *
+   * This method checks existence the most recent block added to the blockchain.
+   *
+   * @returns {boolean} The latest block in the blockchain exists.
+   */
+  existsLatestBlock() {
+    return this.#getChain().length - 1 >= 0;
   }
 
   /**
@@ -1489,7 +1518,10 @@ class TinyChainInstance {
       balances[address] = BigInt(balance);
 
     const chain = chainList.slice(startIndex, end + 1);
-    for (const block of chain) this.updateBalance(block, balances, false);
+    for (const block of chain) {
+      if (!this.isChainBlockIgnored(block.getIndex(), block.getHash()))
+        this.updateBalance(block, balances, false);
+    }
 
     return balances;
   }
@@ -1537,8 +1569,12 @@ class TinyChainInstance {
    */
   recalculateBalances() {
     this.startBalances();
-    if (this.isCurrencyMode() || this.isPayloadMode())
-      for (const block of this.#getChain()) this.updateBalance(block);
+    if (this.isCurrencyMode() || this.isPayloadMode()) {
+      const chain = this.#getChain();
+      for (const block of chain) {
+        if (!this.isChainBlockIgnored(block.getIndex(), block.getHash())) this.updateBalance(block);
+      }
+    }
     this.#emit(TinyChainEvents.BalanceRecalculated, this.#getBalances());
   }
 
@@ -1553,15 +1589,66 @@ class TinyChainInstance {
   }
 
   /**
-   * Retrieves a block from the chain at a specific index.
+   * Checks if a block with the specified chain index exists.
+   *
+   * This method searches the chain for a block whose internal index (retrieved via `.getIndex()`)
+   * matches the given `bigint` value.
+   *
+   * @param {bigint} index - The unique internal index of the block to check.
+   * @returns {boolean} Returns true if a block with that index exists, otherwise false.
+   */
+  chainBlockIndexExists(index) {
+    const chain = this.#getChain();
+    return chain.some((block) => block.getIndex() === index);
+  }
+
+  /**
+   * Retrieves a block from the chain at a specific block index.
+   *
+   * @param {bigint} index - The index of the block to retrieve.
+   * @param {string} [hash] - The index of the block to retrieve.
+   * @returns {TinyChainBlock} The block instance at the specified index.
+   * @throws {Error} If the block at the given block index does not exist.
+   */
+  getChainBlockByIndex(index, hash) {
+    const chain = this.#getChain();
+    if (typeof index !== 'bigint') throw new Error('Expected index to be a bigint.');
+    if (typeof hash !== 'undefined' && typeof hash !== 'string')
+      throw new Error('If provided, hash must be a string.');
+
+    const block = chain.find(
+      (bc) => bc.getIndex() === index && (typeof hash === 'undefined' || hash === bc.getHash()),
+    );
+    if (!block)
+      throw new Error(
+        `The chain data block index "${index}"${typeof hash === 'string' ? ` of hash "${hash}"` : ''} don't exist!`,
+      );
+    return block;
+  }
+
+  /**
+   * Checks if a block exists at the specified array index.
+   *
+   * This method verifies whether there is a chain block at the given zero-based position in the array.
+   *
+   * @param {number} index - The array index of the block to check.
+   * @returns {boolean} Returns true if a block exists at that index, otherwise false.
+   */
+  chainBlockExists(index) {
+    const chain = this.#getChain();
+    return !!chain[index];
+  }
+
+  /**
+   * Retrieves a block from the chain at a specific array index.
    *
    * @param {number} index - The index of the block to retrieve.
    * @returns {TinyChainBlock} The block instance at the specified index.
-   * @throws {Error} If the block at the given index does not exist.
+   * @throws {Error} If the block at the given array index does not exist.
    */
   getChainBlock(index) {
     const chain = this.#getChain();
-    if (!chain[index]) throw new Error(`The chain data ${index} don't exist!`);
+    if (!chain[index]) throw new Error(`The chain data array index "${index}" don't exist!`);
     return chain[index];
   }
 
@@ -1604,14 +1691,85 @@ class TinyChainInstance {
     this.startBalances();
   }
 
+  /** @type {Set<string>} */
+  #ignoredBlocks = new Set();
+
+  /**
+   * Ignores a specific chain block by its index, preventing it from affecting calculations.
+   *
+   * @param {bigint} index - The index of the chain block to ignore.
+   * @param {string} hash - The hash of the chain block to ignore.
+   * @throws {Error} If the block does not exist.
+   */
+  ignoreChainBlock(index, hash) {
+    if (typeof index !== 'bigint') throw new Error('Expected index to be a bigint.');
+    if (typeof hash !== 'string') throw new Error('Expected hash to be a string.');
+    this.getChainBlockByIndex(index, hash);
+    this.#ignoredBlocks.add(`${hash}:${index.toString()}`);
+    this.recalculateBalances();
+  }
+
+  /**
+   * Reverts the ignore status of a specific chain block by its index.
+   *
+   * @param {bigint} index - The index of the chain block to unignore.
+   * @param {string} hash - The hash of the chain block to unignore.
+   * @returns {boolean} Returns true if the block was previously ignored and has now been unignored.
+   */
+  unignoreChainBlock(index, hash) {
+    if (typeof index !== 'bigint') throw new Error('Expected index to be a bigint.');
+    if (typeof hash !== 'string') throw new Error('Expected hash to be a string.');
+    const wasIgnored = this.#ignoredBlocks.delete(`${hash}:${index.toString()}`);
+    if (wasIgnored) this.recalculateBalances();
+    return wasIgnored;
+  }
+
+  /**
+   * Checks if a chain block is currently being ignored.
+   *
+   * @param {bigint} index - The index of the chain block to check.
+   * @param {string} hash - The hash of the chain block to check.
+   * @returns {boolean} Returns true if the block is ignored.
+   */
+  isChainBlockIgnored(index, hash) {
+    if (typeof index !== 'bigint') throw new Error('Expected index to be a bigint.');
+    if (typeof hash !== 'string') throw new Error('Expected hash to be a string.');
+    return this.#ignoredBlocks.has(`${hash}:${index.toString()}`);
+  }
+
+  /**
+   * Checks if a chain block hash is currently being ignored.
+   *
+   * @param {string} hash - The hash of the chain block to check.
+   * @returns {boolean} Returns true if the block is ignored.
+   */
+  isChainBlockHashIgnored(hash) {
+    if (typeof hash !== 'string') throw new Error('Expected hash to be a string.');
+    let exists = false;
+    this.#ignoredBlocks.forEach((hashCheck) => {
+      if (hashCheck.startsWith(`${hash}:`)) exists = true;
+    });
+    return exists;
+  }
+
+  /**
+   * Returns a shallow clone of the set containing all ignored chain block indices.
+   *
+   * @returns {Set<string>} A new Set instance with all currently ignored block indices.
+   */
+  getIgnoredBlocks() {
+    return new Set(this.#ignoredBlocks);
+  }
+
   /**
    * Exports a slice of the blockchain for serialization or transfer.
    *
-   * The method safely extracts and serializes blocks between two indices.
+   * This method safely extracts and serializes blocks between two indices,
+   * excluding any blocks currently marked as ignored.
    *
-   * @param {number} [startIndex=0] - The starting index of the block range.
+   * @param {number} [startIndex=0] - The starting index of the block range (inclusive).
    * @param {number|null} [endIndex=null] - The ending index (inclusive); defaults to the last block.
-   * @returns {string[]} An array of exported block data.
+   * @returns {string[]} An array of exported block data, excluding ignored blocks.
    * @throws {Error} If indices are out of bounds or invalid.
    */
   exportChain(startIndex = 0, endIndex = null) {
@@ -1620,7 +1778,14 @@ class TinyChainInstance {
     if (startIndex < 0 || end >= chain.length || startIndex > end)
       throw new Error('Invalid startIndex or endIndex range.');
 
-    return chain.slice(startIndex, end + 1).map((b) => b.export());
+    const exported = [];
+
+    for (let i = startIndex; i <= end; i++) {
+      if (!this.isChainBlockIgnored(chain[i].getIndex(), chain[i].getHash()))
+        exported.push(chain[i].export());
+    }
+
+    return exported;
   }
 
   /**
@@ -1631,9 +1796,24 @@ class TinyChainInstance {
    * @emits ImportChain - When the new chain is imported.
    *
    * @param {string[]} chain - The array of serialized blocks to import.
+   * @param {Set<string>} [ignoredBlocks] - Ignored blocks list.
    * @throws {Error} If the imported chain is null, invalid, or corrupted.
    */
-  importChain(chain) {
+  importChain(chain, ignoredBlocks) {
+    if (typeof ignoredBlocks !== 'undefined') {
+      if (!(ignoredBlocks instanceof Set))
+        throw new Error('ignoredBlocks must be a Set instance if provided.');
+      for (const val of ignoredBlocks) {
+        if (typeof val !== 'string') {
+          throw new Error(
+            `Invalid value in ignoredBlocks Set: expected only string values, but got ${typeof val}.`,
+          );
+        }
+      }
+
+      this.#ignoredBlocks = new Set(ignoredBlocks);
+    }
+
     this.chain = chain.map((seValue) => {
       const { value } = this.#parser.deserializeDeep(seValue, 'object');
       return this.#createBlockInstance({ ...value });
@@ -1693,7 +1873,7 @@ class TinyChainInstance {
    */
   getBaseFeePerGas() {
     if (typeof this.baseFeePerGas !== 'bigint') throw new Error('baseFeePerGas must be a bigint');
-    return this.baseFeePerGas;
+    return this.isCurrencyMode() ? this.baseFeePerGas : 0n;
   }
 
   /**
@@ -1703,7 +1883,7 @@ class TinyChainInstance {
   getDefaultPriorityFee() {
     if (typeof this.priorityFeeDefault !== 'bigint')
       throw new Error('priorityFeeDefault must be a bigint');
-    return this.priorityFeeDefault;
+    return this.isCurrencyMode() ? this.priorityFeeDefault : 0n;
   }
 
   /**
@@ -1712,7 +1892,7 @@ class TinyChainInstance {
    */
   getTransferGas() {
     if (typeof this.transferGas !== 'bigint') throw new Error('transferGas must be a bigint');
-    return this.transferGas;
+    return this.isCurrencyMode() ? this.transferGas : 0n;
   }
 
   /**
@@ -1730,7 +1910,7 @@ class TinyChainInstance {
    */
   getInitialReward() {
     if (typeof this.initialReward !== 'bigint') throw new Error('initialReward must be a bigint');
-    return this.initialReward;
+    return this.isCurrencyMode() ? this.initialReward : 0n;
   }
 
   /**
