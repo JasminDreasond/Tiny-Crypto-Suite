@@ -13,6 +13,7 @@
         "moduleResolution": "node",
         "module": "esnext",
         "allowSyntheticDefaultImports": true,
+        "skipLibCheck": true,
     },
     "include": ["src"],
     "exclude": ["node_modules"]
