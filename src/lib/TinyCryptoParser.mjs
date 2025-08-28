@@ -84,7 +84,7 @@ class TinyCryptoParser {
        */
       (value) => Number(value),
       // Convert
-      (data) => ({ __type: 'number', value: data }),
+      (data) => ({ __type: 'number', value: String(data) }),
     );
 
     // Boolean
