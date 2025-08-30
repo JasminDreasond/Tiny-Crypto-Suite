@@ -131,6 +131,13 @@ This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) 
 
 ---
 
+## 🔙 Back to Tiny Essentials
+
+Did you like this module? It’s part of the **Tiny Essentials** collection — a set of minimal yet powerful tools to make development easier.
+👉 [Click here to explore more Tiny Essentials modules](https://github.com/JasminDreasond/Tiny-Essentials)
+
+---
+
 <div align="center">
 <a href="./img/"><img src="./img/f67893c7-e757-4e24-bc31-8f7490ae2098.png" height="300" /></a>
 <br/>
