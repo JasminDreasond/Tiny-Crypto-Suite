@@ -1,6 +1,7 @@
 # Remove original repository data
 src
 easter_egg
+img
 test
 temp
 .babelrc
