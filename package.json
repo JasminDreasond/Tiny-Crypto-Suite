@@ -63,7 +63,7 @@
     "olm"
   ],
   "author": "Yasmin Seidel (Jasmin Dreasond)",
-  "license": "GPL-3.0-only",
+  "license": "LGPL-3.0-only",
   "bugs": {
     "url": "https://github.com/JasminDreasond/Tiny-Crypto-Suite/issues"
   },
