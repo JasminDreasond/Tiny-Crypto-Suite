@@ -2,8 +2,8 @@ import { Buffer } from 'buffer';
 import TinySecp256k1 from './index.mjs';
 
 class TinyBtcSecp256k1 extends TinySecp256k1 {
-  /** @typedef {import('bs58check/index')} Bs58check */
-  /** @typedef {import('bech32/index')} Bech32 */
+  /** @typedef {import('bs58check/index.js')} Bs58check */
+  /** @typedef {import('bech32/index.js')} Bech32 */
   /** @typedef {import('elliptic').ec.KeyPair} KeyPair */
   /** @typedef {import('./index.mjs').ValidationResult} ValidationResult */
   /** @typedef {'p2pkh'|'bech32'} PubKeyTypes */
