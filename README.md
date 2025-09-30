@@ -139,7 +139,7 @@ Did you like this module? It’s part of the **Tiny Essentials** collection — 
 ---
 
 <div align="center">
-<a href="./md-assets/img/"><img src="./md-assets/img/f67893c7-e757-4e24-bc31-8f7490ae2098.png" height="300" /></a>
+<a href="./img/"><img src="./img/f67893c7-e757-4e24-bc31-8f7490ae2098.png" height="300" /></a>
 <br/>
 Made with tiny love!
 </div>
