@@ -1,4 +1,4 @@
-import TinyPromiseQueue from 'tiny-essentials/libs/TinyPromiseQueue';
+import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
 
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
