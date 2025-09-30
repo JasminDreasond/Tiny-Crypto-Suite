@@ -1,6 +1,6 @@
 {
   "name": "tiny-crypto-suite",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "description": "Tiny tools, big crypto — seamless encryption and certificate handling for modern web and Node apps.",
   "scripts": {
     "test": "npm run test:mjs && npm run test:cjs && npm run test:js",
@@ -104,6 +104,6 @@
   },
   "dependencies": {
     "clone": "^2.1.2",
-    "tiny-essentials": "^1.22.1"
+    "tiny-essentials": "^1.24.2"
   }
 }

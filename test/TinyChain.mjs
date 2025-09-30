@@ -1,5 +1,5 @@
 import stringify from 'safe-stable-stringify';
-import { ColorSafeStringify } from 'tiny-essentials';
+import ColorSafeStringify from 'tiny-essentials/libs/ColorSafeStringify';
 import { Buffer } from 'buffer';
 
 import { TinyChain } from '../dist/index.mjs';

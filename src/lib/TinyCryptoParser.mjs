@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { objType } from 'tiny-essentials';
+import { objType } from 'tiny-essentials/basics/objFilter';
 
 /**
  * TinyCryptoParser provides serialization and deserialization utilities for complex JavaScript data types.

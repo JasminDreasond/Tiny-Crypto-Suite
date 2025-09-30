@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { TinyPromiseQueue } from 'tiny-essentials';
+import TinyPromiseQueue from 'tiny-essentials/libs/TinyPromiseQueue';
 import { EventEmitter } from 'events';
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 
