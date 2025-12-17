@@ -35,7 +35,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JasminDreasond/Tiny-Crypto-Suite.git"
+    "url": "git+https://github.com/Tiny-Essentials/Tiny-Crypto-Suite.git"
   },
   "keywords": [
     "encryption",
@@ -65,9 +65,9 @@
   "author": "Yasmin Seidel (Jasmin Dreasond)",
   "license": "LGPL-3.0-only",
   "bugs": {
-    "url": "https://github.com/JasminDreasond/Tiny-Crypto-Suite/issues"
+    "url": "https://github.com/Tiny-Essentials/Tiny-Crypto-Suite/issues"
   },
-  "homepage": "https://github.com/JasminDreasond/Tiny-Crypto-Suite#readme",
+  "homepage": "https://github.com/Tiny-Essentials/Tiny-Crypto-Suite#readme",
   "devDependencies": {
     "@babel/cli": "^7.27.0",
     "@babel/core": "^7.26.10",
