@@ -51,6 +51,14 @@ Together, they form a flexible system for secure communication, configuration ha
 npm install tiny-crypto-suite
 ```
 
+## Build 📦
+
+To get started, please install the project dependencies. It is **mandatory** to run the build command afterward to ensure the module works correctly:
+```bash
+npm install
+npm run build:essentials
+```
+
 ---
 
 ## 🚀 Usage Example

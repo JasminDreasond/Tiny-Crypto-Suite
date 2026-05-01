@@ -1,5 +1,5 @@
-import { TinyPromiseQueue } from 'tiny-essentials';
 import { EventEmitter } from 'events';
+import TinyPromiseQueue from '../tiny-modules/libs/TinyPromiseQueue.mjs';
 
 import TinyCryptoParser from '../lib/TinyCryptoParser.mjs';
 import tinyOlm from './TinyOlmModule.mjs';
