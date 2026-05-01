@@ -35,6 +35,29 @@ Together, they form a flexible system for secure communication, configuration ha
 
 ---
 
+## 🛠️ Tiny-Essentials Fork Notice
+
+Just a quick heads-up! 🚨 The object type imports from **Tiny-Essentials** have their own dedicated storage in this project. This happens because the `tiny-essentials-fork` extracts these scripts directly into our module to keep everything standalone.
+
+To keep things organized and avoid naming conflicts, we renamed the core filter functions when exporting them. Here is a handy table showing the original Tiny-Essentials function names and how they are represented here:
+
+| Original `tiny-essentials` Function | Exported Function in this Suite |
+| :--- | :--- |
+| `checkObj` | `checkCryptoObj` |
+| `cloneObjTypeOrder` | `cloneCryptoObjTypeOrder` |
+| `extendObjType` | `extendCryptoObjType` |
+| `getCheckObj` | `getCheckCryptoObj` |
+| `objType` | `cryptoObjType` |
+| `reorderObjTypeOrder` | `reorderCryptoObjTypeOrder` |
+
+📦 **Direct Access:** Good news! Our `package.json` is fully adapted with `exports`, meaning you can access these functions directly from the native file if you need to, like this:
+
+```javascript
+import { checkCryptoObj } from 'tiny-crypto-suite/tiny-modules/basics/objFilter';
+```
+
+---
+
 ## 🧩 Use Cases
 
 - 🔐 Generate and validate X.509 certificates
@@ -63,7 +86,7 @@ npm run build:essentials
 
 ## 🚀 Usage Example
 
-```js
+```javascript
 // Import the module
 import { TinyCrypto, TinyCertCrypto } from 'tiny-crypto-suite';
 
@@ -118,7 +141,6 @@ Whether you need high-level encrypted configs or low-level cert management, this
 - Use **TinyCertCrypto** to handle certificates, keys, and secure communication.
 - Use **TinyCrypto** to serialize, encrypt, and store complex app data safely.
 - Combine both for maximum flexibility and layered security. 🔐
-
 
 ## 📚 Documentation
 
