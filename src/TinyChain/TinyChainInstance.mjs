@@ -209,7 +209,7 @@ class TinyChainInstance {
    * Returns the number of times the given `listener` is registered for the specified `event`.
    * If no `listener` is passed, returns how many listeners are registered for the `event`.
    * @param {string | symbol} eventName - The name of the event.
-   * @param {Function} [listener] - Optional listener function to count.
+   * @param {((...args: any[]) => void) | undefined} [listener] - Optional listener function to count.
    * @returns {number} Number of matching listeners.
    */
   listenerCount(eventName, listener) {
