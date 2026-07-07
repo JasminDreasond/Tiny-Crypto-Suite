@@ -127,7 +127,7 @@
     "type-fest": "^4.40.0",
     "typescript": "^6.0.3",
     "webpack": "^5.99.6",
-    "webpack-cli": "^6.0.1"
+    "webpack-cli": "^7.2.1"
   },
   "dependencies": {
     "clone": "^2.1.2"
