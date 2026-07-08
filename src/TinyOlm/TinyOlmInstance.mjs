@@ -13,7 +13,7 @@ import TinyOlmEvents from './TinyOlmEvents.mjs';
  * @beta
  * @class
  */
-class TinyOlmInstance {
+class TinyOlmInstance extends EventEmitter {
   /**
    * Creates a new TinyOlm instance for a specific userId.
    *
@@ -22,6 +22,7 @@ class TinyOlmInstance {
    * @param {string} [password] - The optional password to associate with the account and sessions.
    */
   constructor(userId, deviceId, password = '') {
+    super();
     /** @type {string} */
     this.password = password;
 
@@ -42,213 +43,6 @@ class TinyOlmInstance {
 
     /** @type {Map<string, Olm.InboundGroupSession>} */
     this.groupInboundSessions = new Map();
-  }
-
-  /**
-   * Important instance used to make event emitter.
-   * @type {EventEmitter}
-   */
-  #events = new EventEmitter();
-
-  /**
-   * Important instance used to make system event emitter.
-   * @type {EventEmitter}
-   */
-  #sysEvents = new EventEmitter();
-  #sysEventsUsed = false;
-
-  /**
-   * Emits an event with optional arguments to all system emit.
-   * @param {string | symbol} event - The name of the event to emit.
-   * @param {...any} args - Arguments passed to event listeners.
-   */
-  #emit(event, ...args) {
-    this.#events.emit(event, ...args);
-    if (this.#sysEventsUsed) this.#sysEvents.emit(event, ...args);
-  }
-
-  /**
-   * Provides access to a secure internal EventEmitter for subclass use only.
-   *
-   * This method exposes a dedicated EventEmitter instance intended specifically for subclasses
-   * that extend the main class. It prevents subclasses from accidentally or intentionally using
-   * the primary class's public event system (`emit`), which could lead to unpredictable behavior
-   * or interference in the base class's event flow.
-   *
-   * For security and consistency, this method is designed to be accessed only once.
-   * Multiple accesses are blocked to avoid leaks or misuse of the internal event bus.
-   *
-   * @returns {EventEmitter} A special internal EventEmitter instance for subclass use.
-   * @throws {Error} If the method is called more than once.
-   */
-  getSysEvents() {
-    if (this.#sysEventsUsed)
-      throw new Error(
-        'Access denied: getSysEvents() can only be called once. ' +
-          'This restriction ensures subclass event isolation and prevents accidental interference ' +
-          'with the main class event emitter.',
-      );
-    this.#sysEventsUsed = true;
-    return this.#sysEvents;
-  }
-
-  /**
-   * @typedef {(...args: any[]) => void} ListenerCallback
-   * A generic callback function used for event listeners.
-   */
-
-  /**
-   * Sets the maximum number of listeners for the internal event emitter.
-   *
-   * @param {number} max - The maximum number of listeners allowed.
-   */
-  setMaxListeners(max) {
-    this.#events.setMaxListeners(max);
-  }
-
-  /**
-   * Emits an event with optional arguments.
-   * @param {string | symbol} event - The name of the event to emit.
-   * @param {...any} args - Arguments passed to event listeners.
-   * @returns {boolean} `true` if the event had listeners, `false` otherwise.
-   */
-  emit(event, ...args) {
-    return this.#events.emit(event, ...args);
-  }
-
-  /**
-   * Registers a listener for the specified event.
-   * @param {string | symbol} event - The name of the event to listen for.
-   * @param {ListenerCallback} listener - The callback function to invoke.
-   * @returns {this} The current class instance (for chaining).
-   */
-  on(event, listener) {
-    this.#events.on(event, listener);
-    return this;
-  }
-
-  /**
-   * Registers a one-time listener for the specified event.
-   * @param {string | symbol} event - The name of the event to listen for once.
-   * @param {ListenerCallback} listener - The callback function to invoke.
-   * @returns {this} The current class instance (for chaining).
-   */
-  once(event, listener) {
-    this.#events.once(event, listener);
-    return this;
-  }
-
-  /**
-   * Removes a listener from the specified event.
-   * @param {string | symbol} event - The name of the event.
-   * @param {ListenerCallback} listener - The listener to remove.
-   * @returns {this} The current class instance (for chaining).
-   */
-  off(event, listener) {
-    this.#events.off(event, listener);
-    return this;
-  }
-
-  /**
-   * Alias for `on`.
-   * @param {string | symbol} event - The name of the event.
-   * @param {ListenerCallback} listener - The callback to register.
-   * @returns {this} The current class instance (for chaining).
-   */
-  addListener(event, listener) {
-    this.#events.addListener(event, listener);
-    return this;
-  }
-
-  /**
-   * Alias for `off`.
-   * @param {string | symbol} event - The name of the event.
-   * @param {ListenerCallback} listener - The listener to remove.
-   * @returns {this} The current class instance (for chaining).
-   */
-  removeListener(event, listener) {
-    this.#events.removeListener(event, listener);
-    return this;
-  }
-
-  /**
-   * Removes all listeners for a specific event, or all events if no event is specified.
-   * @param {string | symbol} [event] - The name of the event. If omitted, all listeners from all events will be removed.
-   * @returns {this} The current class instance (for chaining).
-   */
-  removeAllListeners(event) {
-    this.#events.removeAllListeners(event);
-    return this;
-  }
-
-  /**
-   * Returns the number of times the given `listener` is registered for the specified `event`.
-   * If no `listener` is passed, returns how many listeners are registered for the `event`.
-   * @param {string | symbol} eventName - The name of the event.
-   * @param {((...args: any[]) => void) | undefined} [listener] - Optional listener function to count.
-   * @returns {number} Number of matching listeners.
-   */
-  listenerCount(eventName, listener) {
-    return this.#events.listenerCount(eventName, listener);
-  }
-
-  /**
-   * Adds a listener function to the **beginning** of the listeners array for the specified event.
-   * The listener is called every time the event is emitted.
-   * @param {string | symbol} eventName - The event name.
-   * @param {ListenerCallback} listener - The callback function.
-   * @returns {this} The current class instance (for chaining).
-   */
-  prependListener(eventName, listener) {
-    this.#events.prependListener(eventName, listener);
-    return this;
-  }
-
-  /**
-   * Adds a **one-time** listener function to the **beginning** of the listeners array.
-   * The next time the event is triggered, this listener is removed and then invoked.
-   * @param {string | symbol} eventName - The event name.
-   * @param {ListenerCallback} listener - The callback function.
-   * @returns {this} The current class instance (for chaining).
-   */
-  prependOnceListener(eventName, listener) {
-    this.#events.prependOnceListener(eventName, listener);
-    return this;
-  }
-
-  /**
-   * Returns an array of event names for which listeners are currently registered.
-   * @returns {(string | symbol)[]} Array of event names.
-   */
-  eventNames() {
-    return this.#events.eventNames();
-  }
-
-  /**
-   * Gets the current maximum number of listeners allowed for any single event.
-   * @returns {number} The max listener count.
-   */
-  getMaxListeners() {
-    return this.#events.getMaxListeners();
-  }
-
-  /**
-   * Returns a copy of the listeners array for the specified event.
-   * @param {string | symbol} eventName - The event name.
-   * @returns {Function[]} An array of listener functions.
-   */
-  listeners(eventName) {
-    return this.#events.listeners(eventName);
-  }
-
-  /**
-   * Returns a copy of the internal listeners array for the specified event,
-   * including wrapper functions like those used by `.once()`.
-   * @param {string | symbol} eventName - The event name.
-   * @returns {Function[]} An array of raw listener functions.
-   */
-  rawListeners(eventName) {
-    return this.#events.rawListeners(eventName);
   }
 
   /**
@@ -409,7 +203,7 @@ class TinyOlmInstance {
       const req = tx.objectStore(store).put(value, key);
       return new Promise((resolve, reject) => {
         req.onsuccess = () => {
-          this.#events.emit(TinyOlmEvents.DbPut, store, key, value);
+          this.emit(TinyOlmEvents.DbPut, store, key, value);
           resolve(req.result);
         };
         req.onerror = () => reject(req.error);
@@ -430,7 +224,7 @@ class TinyOlmInstance {
       const req = tx.objectStore(store).delete(key);
       return new Promise((resolve, reject) => {
         req.onsuccess = () => {
-          this.#events.emit(TinyOlmEvents.DbDelete, store, key);
+          this.emit(TinyOlmEvents.DbDelete, store, key);
           resolve(req.result);
         };
         req.onerror = () => reject(req.error);
@@ -450,7 +244,7 @@ class TinyOlmInstance {
       const req = tx.objectStore(store).clear();
       return new Promise((resolve, reject) => {
         req.onsuccess = () => {
-          this.#events.emit(TinyOlmEvents.DbClear, store);
+          this.emit(TinyOlmEvents.DbClear, store);
           resolve(req.result);
         };
         req.onerror = () => reject(req.error);
@@ -525,13 +319,13 @@ class TinyOlmInstance {
     this.#db = db;
 
     await this.#idbPut('account', 'password', this.password);
-    this.#emit(TinyOlmEvents.SetPassword, this.password);
+    this.emit(TinyOlmEvents.SetPassword, this.password);
 
     await this.#idbPut('account', 'userId', this.userId);
-    this.#emit(TinyOlmEvents.SetUserId, this.userId);
+    this.emit(TinyOlmEvents.SetUserId, this.userId);
 
     await this.#idbPut('account', 'deviceId', this.deviceId);
-    this.#emit(TinyOlmEvents.SetDeviceId, this.deviceId);
+    this.emit(TinyOlmEvents.SetDeviceId, this.deviceId);
 
     // Load and restore account
     const accountPickle = await this.#idbGet('account', 'main');
@@ -598,7 +392,7 @@ class TinyOlmInstance {
     this.password = newPassword;
 
     if (this.existsDb()) await this.#idbPut('account', 'password', this.password);
-    this.#emit(TinyOlmEvents.SetPassword, newPassword);
+    this.emit(TinyOlmEvents.SetPassword, newPassword);
   }
 
   /**
@@ -623,7 +417,7 @@ class TinyOlmInstance {
       throw new Error('The value provided to userId must be a string.');
     this.userId = newUserId;
     if (this.existsDb()) await this.#idbPut('account', 'userId', this.userId);
-    this.#emit(TinyOlmEvents.SetUserId, newUserId);
+    this.emit(TinyOlmEvents.SetUserId, newUserId);
   }
 
   /**
@@ -648,7 +442,7 @@ class TinyOlmInstance {
       throw new Error('The value provided to deviceId must be a string.');
     this.deviceId = newDeviceId;
     if (this.existsDb()) await this.#idbPut('account', 'deviceId', this.deviceId);
-    this.#emit(TinyOlmEvents.SetDeviceId, newDeviceId);
+    this.emit(TinyOlmEvents.SetDeviceId, newDeviceId);
   }
 
   /**
@@ -807,7 +601,7 @@ class TinyOlmInstance {
     this.account = account;
 
     if (this.existsDb()) await this.#idbPut('account', 'main', account.pickle(this.password));
-    this.#emit(TinyOlmEvents.ImportAccount, account);
+    this.emit(TinyOlmEvents.ImportAccount, account);
   }
 
   /**
@@ -825,7 +619,7 @@ class TinyOlmInstance {
     if (this.isUseLocal()) this.sessions.set(key, sess);
 
     await this.#idbPut('sessions', key, sess.pickle(this.password));
-    this.#emit(TinyOlmEvents.ImportSession, key, sess);
+    this.emit(TinyOlmEvents.ImportSession, key, sess);
   }
 
   /**
@@ -843,7 +637,7 @@ class TinyOlmInstance {
     if (this.isUseLocal()) this.groupSessions.set(key, group);
 
     if (this.existsDb()) await this.#idbPut('groupSessions', key, group.pickle(this.password));
-    this.#emit(TinyOlmEvents.ImportGroupSession, key, group);
+    this.emit(TinyOlmEvents.ImportGroupSession, key, group);
   }
 
   /**
@@ -862,7 +656,7 @@ class TinyOlmInstance {
 
     if (this.existsDb())
       await this.#idbPut('groupInboundSessions', key, inbound.pickle(this.password));
-    this.#emit(TinyOlmEvents.ImportInboundGroupSession, key, inbound);
+    this.emit(TinyOlmEvents.ImportInboundGroupSession, key, inbound);
   }
 
   /**
@@ -925,7 +719,7 @@ class TinyOlmInstance {
     session.free();
 
     if (this.existsDb()) await this.#idbDelete('sessions', userId);
-    this.#emit(TinyOlmEvents.RemoveSession, userId, session);
+    this.emit(TinyOlmEvents.RemoveSession, userId, session);
     return this.isUseLocal() ? this.sessions.delete(userId) : true;
   }
 
@@ -938,7 +732,7 @@ class TinyOlmInstance {
     for (const session of this.sessions.values()) session.free();
     this.sessions.clear();
     if (this.existsDb()) await this.#idbClear('sessions');
-    this.#emit(TinyOlmEvents.ClearSessions);
+    this.emit(TinyOlmEvents.ClearSessions);
   }
 
   /**
@@ -952,7 +746,7 @@ class TinyOlmInstance {
     this.account.create();
 
     if (this.existsDb()) await this.#idbPut('account', 'main', this.account.pickle(this.password));
-    this.#emit(TinyOlmEvents.CreateAccount, this.account);
+    this.emit(TinyOlmEvents.CreateAccount, this.account);
   }
 
   /**
@@ -978,7 +772,7 @@ class TinyOlmInstance {
 
     if (this.existsDb())
       await this.#idbPut('groupSessions', roomId, outboundSession.pickle(this.password));
-    this.#emit(TinyOlmEvents.CreateGroupSession, roomId, outboundSession);
+    this.emit(TinyOlmEvents.CreateGroupSession, roomId, outboundSession);
     return outboundSession;
   }
 
@@ -1025,7 +819,7 @@ class TinyOlmInstance {
 
     if (this.existsDb())
       await this.#idbPut('groupInboundSessions', sessionId, inboundSession.pickle(this.password));
-    this.#emit(TinyOlmEvents.ImportGroupSessionId, sessionId, inboundSession);
+    this.emit(TinyOlmEvents.ImportGroupSessionId, sessionId, inboundSession);
   }
 
   /**
@@ -1058,7 +852,7 @@ class TinyOlmInstance {
     session.free();
 
     if (this.existsDb()) await this.#idbDelete('groupSessions', roomId);
-    this.#emit(TinyOlmEvents.RemoveGroupSession, roomId, session);
+    this.emit(TinyOlmEvents.RemoveGroupSession, roomId, session);
     return this.isUseLocal() ? this.groupSessions.delete(roomId) : true;
   }
 
@@ -1072,7 +866,7 @@ class TinyOlmInstance {
     this.groupSessions.clear();
 
     if (this.existsDb()) await this.#idbClear('groupSessions');
-    this.#emit(TinyOlmEvents.ClearGroupSessions);
+    this.emit(TinyOlmEvents.ClearGroupSessions);
   }
 
   /**
@@ -1110,7 +904,7 @@ class TinyOlmInstance {
     session.free();
 
     if (this.existsDb()) await this.#idbDelete('groupInboundSessions', sessionId);
-    this.#emit(TinyOlmEvents.RemoveInboundGroupSession, sessionId, session);
+    this.emit(TinyOlmEvents.RemoveInboundGroupSession, sessionId, session);
     return this.isUseLocal() ? this.groupInboundSessions.delete(sessionId) : true;
   }
 
@@ -1123,7 +917,7 @@ class TinyOlmInstance {
     for (const inbound of this.groupInboundSessions.values()) inbound.free();
     this.groupInboundSessions.clear();
     if (this.existsDb()) await this.#idbClear('groupInboundSessions');
-    this.#emit(TinyOlmEvents.ClearInboundGroupSessions);
+    this.emit(TinyOlmEvents.ClearInboundGroupSessions);
   }
 
   /**
@@ -1173,7 +967,7 @@ class TinyOlmInstance {
     this.signedOneTimeKeys = signedKeys;
 
     await this.#saveAccount();
-    this.#emit(TinyOlmEvents.SignOneTimeKeys, signedKeys);
+    this.emit(TinyOlmEvents.SignOneTimeKeys, signedKeys);
     return signedKeys;
   }
 
@@ -1199,7 +993,7 @@ class TinyOlmInstance {
     this.account.mark_keys_as_published();
 
     await this.#saveAccount();
-    this.#emit(TinyOlmEvents.MarkKeysAsPublished);
+    this.emit(TinyOlmEvents.MarkKeysAsPublished);
   }
 
   /**
@@ -1221,7 +1015,7 @@ class TinyOlmInstance {
 
     if (this.existsDb())
       await this.#idbPut('sessions', theirUsername, session.pickle(this.password));
-    this.#emit(TinyOlmEvents.CreateOutboundSession, theirUsername, session);
+    this.emit(TinyOlmEvents.CreateOutboundSession, theirUsername, session);
   }
 
   /**
@@ -1243,7 +1037,7 @@ class TinyOlmInstance {
 
     if (this.existsDb())
       await this.#idbPut('sessions', senderUsername, session.pickle(this.password));
-    this.#emit(TinyOlmEvents.CreateInboundSession, senderUsername, session);
+    this.emit(TinyOlmEvents.CreateInboundSession, senderUsername, session);
   }
 
   /**
@@ -1322,7 +1116,7 @@ class TinyOlmInstance {
       this.account.free();
       this.account = null;
       if (this.existsDb()) await this.#idbDelete('account', 'main');
-      this.#emit(TinyOlmEvents.ResetAccount);
+      this.emit(TinyOlmEvents.ResetAccount);
     }
   }
 
@@ -1344,13 +1138,13 @@ class TinyOlmInstance {
     const Olm = await tinyOlm.fetchOlm();
     if (this.account) this.account.free();
     if (this.existsDb()) await this.#idbDelete('account', 'main');
-    this.#emit(TinyOlmEvents.ResetAccount);
+    this.emit(TinyOlmEvents.ResetAccount);
 
     this.account = new Olm.Account();
     this.account.create();
 
     if (this.existsDb()) await this.#idbPut('account', 'main', this.account.pickle(this.password));
-    this.#emit(TinyOlmEvents.CreateAccount, this.account);
+    this.emit(TinyOlmEvents.CreateAccount, this.account);
   }
 
   /**
@@ -1857,8 +1651,7 @@ class TinyOlmInstance {
    */
   async destroy() {
     await this.dispose();
-    this.#events.removeAllListeners();
-    this.#sysEvents.removeAllListeners();
+    this.removeAllListeners();
   }
 }
 

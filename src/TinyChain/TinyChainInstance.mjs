@@ -55,7 +55,7 @@ import TinySecp256k1 from './Secp256k1/index.mjs';
  * @class
  * @beta
  */
-class TinyChainInstance {
+class TinyChainInstance extends EventEmitter {
   /** @typedef {import('./TinyChainBlock.mjs').NewTransaction} NewTransaction */
   /** @typedef {import('./TinyChainBlock.mjs').Transaction} Transaction */
   /** @typedef {import('./TinyChainBlock.mjs').TransactionData} TransactionData */
@@ -67,213 +67,6 @@ class TinyChainInstance {
   #payloadSizeLimit;
   #blockContentSizeLimit;
   #textEncoder = new TextEncoder();
-
-  /**
-   * Important instance used to make event emitter.
-   * @type {EventEmitter}
-   */
-  #events = new EventEmitter();
-
-  /**
-   * Important instance used to make system event emitter.
-   * @type {EventEmitter}
-   */
-  #sysEvents = new EventEmitter();
-  #sysEventsUsed = false;
-
-  /**
-   * Emits an event with optional arguments to all system emit.
-   * @param {string | symbol} event - The name of the event to emit.
-   * @param {...any} args - Arguments passed to event listeners.
-   */
-  #emit(event, ...args) {
-    this.#events.emit(event, ...args);
-    if (this.#sysEventsUsed) this.#sysEvents.emit(event, ...args);
-  }
-
-  /**
-   * Provides access to a secure internal EventEmitter for subclass use only.
-   *
-   * This method exposes a dedicated EventEmitter instance intended specifically for subclasses
-   * that extend the main class. It prevents subclasses from accidentally or intentionally using
-   * the primary class's public event system (`emit`), which could lead to unpredictable behavior
-   * or interference in the base class's event flow.
-   *
-   * For security and consistency, this method is designed to be accessed only once.
-   * Multiple accesses are blocked to avoid leaks or misuse of the internal event bus.
-   *
-   * @returns {EventEmitter} A special internal EventEmitter instance for subclass use.
-   * @throws {Error} If the method is called more than once.
-   */
-  getSysEvents() {
-    if (this.#sysEventsUsed)
-      throw new Error(
-        'Access denied: getSysEvents() can only be called once. ' +
-          'This restriction ensures subclass event isolation and prevents accidental interference ' +
-          'with the main class event emitter.',
-      );
-    this.#sysEventsUsed = true;
-    return this.#sysEvents;
-  }
-
-  /**
-   * @typedef {(...args: any[]) => void} ListenerCallback
-   * A generic callback function used for event listeners.
-   */
-
-  /**
-   * Sets the maximum number of listeners for the internal event emitter.
-   *
-   * @param {number} max - The maximum number of listeners allowed.
-   */
-  setMaxListeners(max) {
-    this.#events.setMaxListeners(max);
-  }
-
-  /**
-   * Emits an event with optional arguments.
-   * @param {string | symbol} event - The name of the event to emit.
-   * @param {...any} args - Arguments passed to event listeners.
-   * @returns {boolean} `true` if the event had listeners, `false` otherwise.
-   */
-  emit(event, ...args) {
-    return this.#events.emit(event, ...args);
-  }
-
-  /**
-   * Registers a listener for the specified event.
-   * @param {string | symbol} event - The name of the event to listen for.
-   * @param {ListenerCallback} listener - The callback function to invoke.
-   * @returns {this} The current class instance (for chaining).
-   */
-  on(event, listener) {
-    this.#events.on(event, listener);
-    return this;
-  }
-
-  /**
-   * Registers a one-time listener for the specified event.
-   * @param {string | symbol} event - The name of the event to listen for once.
-   * @param {ListenerCallback} listener - The callback function to invoke.
-   * @returns {this} The current class instance (for chaining).
-   */
-  once(event, listener) {
-    this.#events.once(event, listener);
-    return this;
-  }
-
-  /**
-   * Removes a listener from the specified event.
-   * @param {string | symbol} event - The name of the event.
-   * @param {ListenerCallback} listener - The listener to remove.
-   * @returns {this} The current class instance (for chaining).
-   */
-  off(event, listener) {
-    this.#events.off(event, listener);
-    return this;
-  }
-
-  /**
-   * Alias for `on`.
-   * @param {string | symbol} event - The name of the event.
-   * @param {ListenerCallback} listener - The callback to register.
-   * @returns {this} The current class instance (for chaining).
-   */
-  addListener(event, listener) {
-    this.#events.addListener(event, listener);
-    return this;
-  }
-
-  /**
-   * Alias for `off`.
-   * @param {string | symbol} event - The name of the event.
-   * @param {ListenerCallback} listener - The listener to remove.
-   * @returns {this} The current class instance (for chaining).
-   */
-  removeListener(event, listener) {
-    this.#events.removeListener(event, listener);
-    return this;
-  }
-
-  /**
-   * Removes all listeners for a specific event, or all events if no event is specified.
-   * @param {string | symbol} [event] - The name of the event. If omitted, all listeners from all events will be removed.
-   * @returns {this} The current class instance (for chaining).
-   */
-  removeAllListeners(event) {
-    this.#events.removeAllListeners(event);
-    return this;
-  }
-
-  /**
-   * Returns the number of times the given `listener` is registered for the specified `event`.
-   * If no `listener` is passed, returns how many listeners are registered for the `event`.
-   * @param {string | symbol} eventName - The name of the event.
-   * @param {((...args: any[]) => void) | undefined} [listener] - Optional listener function to count.
-   * @returns {number} Number of matching listeners.
-   */
-  listenerCount(eventName, listener) {
-    return this.#events.listenerCount(eventName, listener);
-  }
-
-  /**
-   * Adds a listener function to the **beginning** of the listeners array for the specified event.
-   * The listener is called every time the event is emitted.
-   * @param {string | symbol} eventName - The event name.
-   * @param {ListenerCallback} listener - The callback function.
-   * @returns {this} The current class instance (for chaining).
-   */
-  prependListener(eventName, listener) {
-    this.#events.prependListener(eventName, listener);
-    return this;
-  }
-
-  /**
-   * Adds a **one-time** listener function to the **beginning** of the listeners array.
-   * The next time the event is triggered, this listener is removed and then invoked.
-   * @param {string | symbol} eventName - The event name.
-   * @param {ListenerCallback} listener - The callback function.
-   * @returns {this} The current class instance (for chaining).
-   */
-  prependOnceListener(eventName, listener) {
-    this.#events.prependOnceListener(eventName, listener);
-    return this;
-  }
-
-  /**
-   * Returns an array of event names for which listeners are currently registered.
-   * @returns {(string | symbol)[]} Array of event names.
-   */
-  eventNames() {
-    return this.#events.eventNames();
-  }
-
-  /**
-   * Gets the current maximum number of listeners allowed for any single event.
-   * @returns {number} The max listener count.
-   */
-  getMaxListeners() {
-    return this.#events.getMaxListeners();
-  }
-
-  /**
-   * Returns a copy of the listeners array for the specified event.
-   * @param {string | symbol} eventName - The event name.
-   * @returns {Function[]} An array of listener functions.
-   */
-  listeners(eventName) {
-    return this.#events.listeners(eventName);
-  }
-
-  /**
-   * Returns a copy of the internal listeners array for the specified event,
-   * including wrapper functions like those used by `.once()`.
-   * @param {string | symbol} eventName - The event name.
-   * @returns {Function[]} An array of raw listener functions.
-   */
-  rawListeners(eventName) {
-    return this.#events.rawListeners(eventName);
-  }
 
   /**
    * Important instance used to make request queue.
@@ -410,6 +203,7 @@ class TinyChainInstance {
     payloadSizeLimit = -1,
     admins = [],
   } = {}) {
+    super();
     // Validation for each parameter
     if (typeof chainId !== 'bigint' && typeof chainId !== 'number' && typeof chainId !== 'string')
       throw new Error('Invalid type for chainId. Expected bigint, number, or string.');
@@ -652,7 +446,7 @@ class TinyChainInstance {
     this.initialBalances = initialBalances;
 
     // Emit the event
-    this.#emit(TinyChainEvents.InitialBalancesUpdated, this.initialBalances);
+    this.emit(TinyChainEvents.InitialBalancesUpdated, this.initialBalances);
   }
 
   /**
@@ -727,7 +521,7 @@ class TinyChainInstance {
    */
   async init(signer = this.#signer) {
     const block = await this.#init(signer);
-    this.#emit(TinyChainEvents.Initialized, block);
+    this.emit(TinyChainEvents.Initialized, block);
   }
 
   /**
@@ -1175,7 +969,7 @@ class TinyChainInstance {
 
         if (this.isCurrencyMode() || this.isPayloadMode()) this.updateBalance(newBlock);
         this.#getChain().push(newBlock);
-        this.#emit(TinyChainEvents.NewBlock, newBlock);
+        this.emit(TinyChainEvents.NewBlock, newBlock);
         return newBlock;
       };
       return mineNow();
@@ -1205,7 +999,7 @@ class TinyChainInstance {
 
       if (this.isCurrencyMode() || this.isPayloadMode()) this.updateBalance(minedBlock);
       this.#getChain().push(minedBlock);
-      this.#emit(TinyChainEvents.NewBlock, minedBlock);
+      this.emit(TinyChainEvents.NewBlock, minedBlock);
       return minedBlock;
     });
   }
@@ -1256,12 +1050,12 @@ class TinyChainInstance {
    */
   startBalances() {
     this.balances = {};
-    this.#emit(TinyChainEvents.BalancesInitialized, this.balances);
+    this.emit(TinyChainEvents.BalancesInitialized, this.balances);
     if (this.isCurrencyMode()) {
       const balances = this.#getBalances();
       for (const [address, balance] of Object.entries(this.getInitialBalances())) {
         balances[address] = BigInt(balance);
-        this.#emit(TinyChainEvents.BalanceStarted, address, balances[address]);
+        this.emit(TinyChainEvents.BalanceStarted, address, balances[address]);
       }
     }
   }
@@ -1384,7 +1178,7 @@ class TinyChainInstance {
           if (!balances[execAddress]) {
             balances[execAddress] = 0n;
             if (emitEvents)
-              this.#emit(TinyChainEvents.BalanceStarted, execAddress, balances[execAddress]);
+              this.emit(TinyChainEvents.BalanceStarted, execAddress, balances[execAddress]);
           }
           const isSufficientBalance = balances[execAddress] >= totalFee ? true : false;
 
@@ -1409,11 +1203,11 @@ class TinyChainInstance {
             for (const { from, to, amount } of transfers) {
               if (!balances[from]) {
                 balances[from] = 0n;
-                if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, from, balances[from]);
+                if (emitEvents) this.emit(TinyChainEvents.BalanceStarted, from, balances[from]);
               }
               if (!balances[to]) {
                 balances[to] = 0n;
-                if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, to, balances[to]);
+                if (emitEvents) this.emit(TinyChainEvents.BalanceStarted, to, balances[to]);
               }
               // @ts-ignore
               balances[from] -= amount;
@@ -1423,7 +1217,7 @@ class TinyChainInstance {
           }
 
           if (emitEvents)
-            this.#emit(TinyChainEvents.BalanceUpdated, {
+            this.emit(TinyChainEvents.BalanceUpdated, {
               transfers,
               address: execAddress,
               isAdmin,
@@ -1434,19 +1228,19 @@ class TinyChainInstance {
         }
 
         if (this.isPayloadMode() && emitEvents)
-          this.#emit(TinyChainEvents.Payload, execAddress, data.payload);
+          this.emit(TinyChainEvents.Payload, execAddress, data.payload);
       }
 
       const totalReward = reward + totalGasCollected;
       const minerAddr = isMinerAddress ? minerAddress : '0';
       if (!balances[minerAddr]) {
         balances[minerAddr] = 0n;
-        if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, minerAddr, balances[minerAddr]);
+        if (emitEvents) this.emit(TinyChainEvents.BalanceStarted, minerAddr, balances[minerAddr]);
       }
       balances[minerAddr] += totalReward;
 
       if (emitEvents)
-        this.#emit(TinyChainEvents.MinerBalanceUpdated, {
+        this.emit(TinyChainEvents.MinerBalanceUpdated, {
           totalGasCollected,
           reward,
           address: minerAddr,
@@ -1456,12 +1250,12 @@ class TinyChainInstance {
       if (minerAddr !== '0') {
         if (!balances['0']) {
           balances['0'] = 0n;
-          if (emitEvents) this.#emit(TinyChainEvents.BalanceStarted, '0', balances['0']);
+          if (emitEvents) this.emit(TinyChainEvents.BalanceStarted, '0', balances['0']);
         }
         balances['0'] += totalGasBurned;
 
         if (emitEvents)
-          this.#emit(TinyChainEvents.MinerBalanceUpdated, {
+          this.emit(TinyChainEvents.MinerBalanceUpdated, {
             totalGasCollected: totalGasBurned,
             reward: 0n,
             address: '0',
@@ -1575,7 +1369,7 @@ class TinyChainInstance {
         if (!this.isChainBlockIgnored(block.getIndex(), block.getHash())) this.updateBalance(block);
       }
     }
-    this.#emit(TinyChainEvents.BalanceRecalculated, this.#getBalances());
+    this.emit(TinyChainEvents.BalanceRecalculated, this.#getBalances());
   }
 
   /**
@@ -1687,7 +1481,7 @@ class TinyChainInstance {
   cleanChain() {
     this.chain = [];
     this.balances = {};
-    this.#emit(TinyChainEvents.ChainCleared);
+    this.emit(TinyChainEvents.ChainCleared);
     this.startBalances();
   }
 
@@ -1824,7 +1618,7 @@ class TinyChainInstance {
     const isValid = this.isValid();
     if (isValid === null) throw new Error('The data chain is null or corrupted.');
     if (!isValid) throw new Error('The data chain is invalid or corrupted.');
-    this.#emit(TinyChainEvents.ImportChain, this.#getChain());
+    this.emit(TinyChainEvents.ImportChain, this.#getChain());
   }
 
   /**
@@ -2016,8 +1810,7 @@ class TinyChainInstance {
   destroy() {
     this.chain = [];
     this.balances = {};
-    this.#events.removeAllListeners();
-    this.#sysEvents.removeAllListeners();
+    this.removeAllListeners();
   }
 }
 
